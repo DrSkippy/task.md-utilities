@@ -2,14 +2,21 @@ from pathlib import Path
 from typing import List, Dict
 import csv
 import shutil
+import openai
 
 from .task import Task
+from .config import Config
 
 class TaskManager:
-    def __init__(self, base_dir: Path):
-        self.base_dir = Path(base_dir)
+    def __init__(self, config: Config):
+        self.config = config
+        self.base_dir = config.base_dir
         self.trash_dir = self.base_dir / "Trash"
         self.trash_dir.mkdir(exist_ok=True)
+        
+        # Configure OpenAI if API key is available
+        if config.openai_api_key:
+            openai.api_key = config.openai_api_key
 
     def get_all_tasks(self) -> Dict[str, List[Task]]:
         """Get all tasks organized by lane."""

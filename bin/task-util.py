@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S poetry run python
 
 import argparse
 from pathlib import Path
@@ -6,9 +6,12 @@ import sys
 import os
 
 from task_lib.task_manager import TaskManager
+from task_lib.config import Config
 
 def main():
     parser = argparse.ArgumentParser(description='Task Manager Utility')
+    parser.add_argument('--config', type=str,
+                      help='Path to configuration file')
     parser.add_argument('--base-dir', type=str, default='.',
                       help='Base directory for tasks (default: current directory)')
     parser.add_argument('--show-tasks', action='store_true',
@@ -26,13 +29,25 @@ def main():
 
     args = parser.parse_args()
     
+    # Load configuration
+    config = Config()
+    if args.config:
+        try:
+            config = Config(Path(args.config))
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+    
+    # Override base_dir from command line if specified
+    if args.base_dir != '.':
+        config.base_dir = Path(args.base_dir).resolve()
+    
     # Ensure base directory exists
-    base_dir = Path(args.base_dir).resolve()
-    if not base_dir.exists():
-        print(f"Error: Base directory '{base_dir}' does not exist")
+    if not config.base_dir.exists():
+        print(f"Error: Base directory '{config.base_dir}' does not exist")
         sys.exit(1)
 
-    task_manager = TaskManager(base_dir)
+    task_manager = TaskManager(config)
 
     if args.show_tasks:
         tasks_by_lane = task_manager.get_all_tasks()

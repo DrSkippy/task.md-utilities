@@ -1,0 +1,7 @@
+{
+  "base_dir": "./test_tasks/tasks.md/tasks",
+  "openai": {
+    "api_key": "your-api-key-here",
+    "model": "gpt-3.5-turbo"
+  }
+} 

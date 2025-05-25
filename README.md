@@ -90,6 +90,33 @@ All commands can be run with a different base directory:
 ./bin/task-util.py --base-dir /path/to/tasks [other options]
 ```
 
+## Configuration
+
+The utility can be configured using a JSON configuration file. Use the `--config` option to specify the configuration file:
+
+```bash
+./bin/task-util.py --config config.json [other options]
+```
+
+### Configuration File Format
+
+```json
+{
+  "base_dir": "/path/to/tasks",
+  "openai": {
+    "api_key": "your-api-key-here",
+    "model": "gpt-3.5-turbo"
+  }
+}
+```
+
+Configuration options:
+- `base_dir`: Base directory for tasks (can be overridden with `--base-dir`)
+- `openai.api_key`: OpenAI API key for AI processing
+- `openai.model`: OpenAI model to use (default: "gpt-3.5-turbo")
+
+### Command Line Options
+
 ## Task File Format
 
 Each task is stored as a markdown file with the following format:
