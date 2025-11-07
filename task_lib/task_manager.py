@@ -92,20 +92,49 @@ class TaskManager:
         for lane_dir in self.base_dir.iterdir():
             if not lane_dir.is_dir() or lane_dir.name == "Trash":
                 continue
-                
+
             task_file = lane_dir / f"{task_title}.md"
             if task_file.exists():
                 task_found = True
                 # Create new lane if it doesn't exist
                 new_lane_dir = self.base_dir / new_lane
                 new_lane_dir.mkdir(exist_ok=True)
-                
+
                 # Move the file to the new lane
                 new_path = new_lane_dir / task_file.name
                 shutil.move(str(task_file), str(new_path))
                 print(f"Moved task '{task_title}' from '{lane_dir.name}' to '{new_lane}'")
                 break
-        
+
         if not task_found:
-            print(f"Error: Task '{task_title}' not found in any lane") 
+            print(f"Error: Task '{task_title}' not found in any lane")
+
+    def calculate_statistics(self) -> Dict:
+        """Calculate statistics from all tasks.
+
+        Returns a dictionary containing:
+        - num_lanes: Number of lanes
+        - tasks_per_lane: Dictionary mapping lane name to task count
+        - tag_counts: Dictionary mapping tag name to occurrence count
+        """
+        tasks_by_lane = self.get_all_tasks()
+
+        # Count lanes
+        num_lanes = len(tasks_by_lane)
+
+        # Count tasks per lane
+        tasks_per_lane = {lane: len(tasks) for lane, tasks in tasks_by_lane.items()}
+
+        # Count tag occurrences
+        tag_counts = {}
+        for lane, tasks in tasks_by_lane.items():
+            for task in tasks:
+                for tag in task.tags:
+                    tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        return {
+            'num_lanes': num_lanes,
+            'tasks_per_lane': tasks_per_lane,
+            'tag_counts': tag_counts
+        } 
                 

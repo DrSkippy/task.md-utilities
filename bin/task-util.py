@@ -26,6 +26,8 @@ def main():
                       help='Empty the trash directory')
     parser.add_argument('--change-lane', nargs=2, metavar=('task', 'new-lane'),
                       help='Change the lane of a task')
+    parser.add_argument('--summary', action='store_true',
+                      help='Show statistics summary (lanes, tasks per lane, tag counts)')
 
     args = parser.parse_args()
     
@@ -81,6 +83,30 @@ def main():
     if args.change_lane:
         task_title, new_lane = args.change_lane
         task_manager.change_lane(task_title, new_lane)
+
+    if args.summary:
+        stats = task_manager.calculate_statistics()
+
+        print("\n" + "=" * 50)
+        print("TASK STATISTICS SUMMARY")
+        print("=" * 50)
+
+        print(f"\nTotal number of lanes: {stats['num_lanes']}")
+
+        print("\nTasks per lane:")
+        print("-" * 30)
+        for lane, count in sorted(stats['tasks_per_lane'].items()):
+            print(f"  {lane}: {count} task{'s' if count != 1 else ''}")
+
+        print("\nTag occurrence counts:")
+        print("-" * 30)
+        if stats['tag_counts']:
+            for tag, count in sorted(stats['tag_counts'].items(), key=lambda x: x[1], reverse=True):
+                print(f"  {tag}: {count} occurrence{'s' if count != 1 else ''}")
+        else:
+            print("  No tags found")
+
+        print()
 
 if __name__ == '__main__':
     main() 
