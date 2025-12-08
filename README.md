@@ -15,7 +15,7 @@ This utility helps manage tasks that are organized in "lanes" (directories). Eac
 1. Clone this repository
 2. Make the utility executable:
    ```bash
-   chmod +x bin/task-util.py
+   chmod +x bin/tasks.py
    ```
 
 ## Project Structure
@@ -37,19 +37,19 @@ The utility provides several commands to manage tasks:
 ### Show Tasks
 Display all tasks in all lanes:
 ```bash
-./bin/task-util.py --show-tasks
+./bin/tasks.py --show-tasks
 ```
 
 ### Add a Lane
 Create a new lane (directory) for organizing tasks:
 ```bash
-./bin/task-util.py --add-lane "lane-name"
+./bin/tasks.py --add-lane "lane-name"
 ```
 
 ### Split Tasks
 Split tasks that contain the `[[split]]` marker into multiple tasks:
 ```bash
-./bin/task-util.py --split-tasks
+./bin/tasks.py --split-tasks
 ```
 When a task is split:
 - New tasks are created with names like "1-original-title", "2-original-title", etc.
@@ -59,7 +59,7 @@ When a task is split:
 ### Create Tasks from CSV
 Create multiple tasks from a CSV file:
 ```bash
-./bin/task-util.py --csv-create-tasks path/to/file.csv
+./bin/tasks.py --csv-create-tasks path/to/file.csv
 ```
 The CSV file should have these columns:
 - `title`: The task title
@@ -70,7 +70,7 @@ The CSV file should have these columns:
 ### Change Task Lane
 Move a task from its current lane to a new lane:
 ```bash
-./bin/task-util.py --change-lane "task-title" "new-lane-name"
+./bin/tasks.py --change-lane "task-title" "new-lane-name"
 ```
 This will:
 - Search for the task in all lanes
@@ -81,13 +81,13 @@ This will:
 ### Empty Trash
 Remove all files from the trash directory:
 ```bash
-./bin/task-util.py --empty-trash
+./bin/tasks.py --empty-trash
 ```
 
 ### Specify Base Directory
 All commands can be run with a different base directory:
 ```bash
-./bin/task-util.py --base-dir /path/to/tasks [other options]
+./bin/tasks.py --base-dir /path/to/tasks [other options]
 ```
 
 ## Configuration
@@ -95,7 +95,7 @@ All commands can be run with a different base directory:
 The utility can be configured using a JSON configuration file. Use the `--config` option to specify the configuration file:
 
 ```bash
-./bin/task-util.py --config config.json [other options]
+./bin/tasks.py --config config.json [other options]
 ```
 
 ### Configuration File Format
@@ -145,7 +145,7 @@ base_directory/
 
 1. Create a new lane and add tasks:
 ```bash
-./bin/task-util.py --add-lane "In Progress"
+./bin/tasks.py --add-lane "In Progress"
 ```
 
 2. Split a task that contains multiple items:
