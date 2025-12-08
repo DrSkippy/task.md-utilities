@@ -4,9 +4,35 @@ import argparse
 from pathlib import Path
 import sys
 import os
+import logging
+from logging.config import dictConfig
 
 from task_lib.task_manager import TaskManager
 from task_lib.config import Config
+
+dictConfig({
+    'version': 1,
+    'formatters': {'default': {
+        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+    }},
+    'handlers': {
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'formatter': 'default',
+            'level': 'DEBUG',
+            'filename': 'task_util.log',
+            'mode': 'a',
+            'encoding': 'utf-8',
+            'maxBytes': 1600000,
+            'backupCount': 3
+        }},
+    'root': {
+        'level': 'DEBUG',
+        'handlers': ['file']
+    }
+})
+
+
 
 def main():
     parser = argparse.ArgumentParser(description='Task Manager Utility')
@@ -46,7 +72,7 @@ def main():
     
     # Ensure base directory exists
     if not config.base_dir.exists():
-        print(f"Error: Base directory '{config.base_dir}' does not exist")
+        logging.error(f"Error: Base directory '{config.base_dir}' does not exist")
         sys.exit(1)
 
     task_manager = TaskManager(config)
@@ -72,7 +98,7 @@ def main():
 
     if args.csv_create_tasks:
         if not os.path.exists(args.csv_create_tasks):
-            print(f"Error: CSV file '{args.csv_create_tasks}' does not exist")
+            logging.error(f"Error: CSV file '{args.csv_create_tasks}' does not exist")
             sys.exit(1)
         task_manager.create_tasks_from_csv(args.csv_create_tasks)
         print(f"Created tasks from CSV file: {args.csv_create_tasks}")

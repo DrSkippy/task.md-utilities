@@ -14,6 +14,7 @@ class Config:
     def load_config(self, config_path: Path) -> None:
         """Load configuration from a JSON file."""
         if not config_path.exists():
+            logging.error(f"Config file {config_path} does not exist")
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
             
         with open(config_path) as f:
@@ -22,7 +23,8 @@ class Config:
         # Set base directory
         if 'base_dir' in config_data:
             self.base_dir = Path(config_data['base_dir']).expanduser().resolve()
-            
+            logging.debug(f"Base directory set to: {self.base_dir}")
+
         # Set OpenAI configuration
         if 'openai' in config_data:
             openai_config = config_data['openai']
@@ -31,15 +33,18 @@ class Config:
     
     def to_dict(self) -> Dict:
         """Convert configuration to dictionary."""
-        return {
+        result = {
             'base_dir': str(self.base_dir),
             'openai': {
                 'api_key': self.openai_api_key,
                 'model': self.openai_model
             }
         }
+        logging.debug(f"Configuration converted to dict: {result}")
+        return result
     
     def save_config(self, config_path: Path) -> None:
         """Save configuration to a JSON file."""
         with open(config_path, 'w') as f:
-            json.dump(self.to_dict(), f, indent=2) 
+            json.dump(self.to_dict(), f, indent=2)
+        logging.debug(f"Configuration saved to: {config_path}")
