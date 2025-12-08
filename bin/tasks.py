@@ -86,6 +86,8 @@ def main():
                 print(f"Title: {task.title}")
                 if task.tags:
                     print(f"Tags: {', '.join(task.tags)}")
+                if task.due_date:
+                    print(f"Due Date: {task.due_date.strftime('%Y-%m-%d')}")
                 print("-" * 40)
 
     if args.split_tasks:
@@ -131,6 +133,12 @@ def main():
                 print(f"  {tag}: {count} occurrence{'s' if count != 1 else ''}")
         else:
             print("  No tags found")
+
+        print("\nDue Date occurrence counts:")
+        print("-" * 30)
+        if stats['due_date_counts']:
+            for tag, count in sorted(stats['due_date_counts'].items(), key=lambda x: x[1], reverse=True):
+                print(f"  {tag}: {count} occurrence{'s' if count != 1 else ''}")
 
         print()
 

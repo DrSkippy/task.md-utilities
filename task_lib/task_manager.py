@@ -123,10 +123,19 @@ class TaskManager:
                 tags = [tag.strip() for tag in row['tag_list'].split(',')]
                 content = row['task']
                 lane = row['lane']
+                due_date = row['due_date'] if 'due_date' in row else None
+                if due_date:
+                    try:
+                        # Validate date format
+                        due_date = datetime.strptime(due_str, '%Y-%m-%d')
+                        logging.debug(f"Found due date: {due_str}")
+                    except ValueError:
+                        logging.warning(f"Invalid due date format found: {due_str}")
                 task = Task(
                     title=title,
                     content=content,
                     tags=tags,
+                    due_date=due_date,
                     lane=lane,  # Default lane
                     path=self.base_dir / lane / f"{title}.md"
                 )
@@ -208,12 +217,19 @@ class TaskManager:
         tasks_per_lane = {lane: len(tasks) for lane, tasks in tasks_by_lane.items()}
         # Count tag occurrences
         tag_counts = {}
+        due_date_counts = {}
         for lane, tasks in tasks_by_lane.items():
             for task in tasks:
                 for tag in task.tags:
                     tag_counts[tag] = tag_counts.get(tag, 0) + 1
+                if task.due_date:
+                    due_str = task.due_date.strftime('%Y-%m-%d')
+                    due_date_counts[due_str] = due_date_counts.get(due_str, 0) + 1
+                else:
+                    due_date_counts['No Due Date'] = due_date_counts.get('No Due Date', 0) + 1
         return {
             'num_lanes': num_lanes,
             'tasks_per_lane': tasks_per_lane,
-            'tag_counts': tag_counts
+            'tag_counts': tag_counts,
+            'due_date_counts': due_date_counts
         }

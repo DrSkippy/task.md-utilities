@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from typing import Optional, Dict
+import logging
 
 class Config:
     def __init__(self, config_path: Optional[Path] = None):

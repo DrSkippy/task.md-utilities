@@ -3,17 +3,19 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
+from datetime import datetime
 
-tag_re = re.compile(r'\[tag:(.*?)\]')
-
+tag_re = re.compile(r'\[tag:.*?\]')
+due_re = re.compile(r'\[due:.*?\]')
 
 @dataclass
 class Task:
     title: str
     content: str
-    tags: List[str]
     lane: str
     path: Path
+    tags: Optional[List[str]] = None
+    due_date: Optional[datetime] = None
 
     @classmethod
     def from_file(cls, file_path: Path, base_dir: Path) -> 'Task':
@@ -30,16 +32,27 @@ class Task:
         logging.debug(f"Loading task '{title}' from lane '{lane}'")
         # Extract tags if present
         tags = []
+        due_date = None
         for line in content.split('\n'):
             matches = tag_re.findall(line)
             if matches:
-                tags.extend([tag.strip('[]')[6, -1] for tag in matches])
-                break
+                tags.extend([tag.strip('[]').split(":")[1].strip() for tag in matches])
+            due_matches = due_re.findall(line)
+            if due_matches:
+                due_str = due_matches[0].strip('[]').split(":")[1].strip()
+                try:
+                    # Validate date format
+                    due_date = datetime.strptime(due_str, '%Y-%m-%d')
+                    logging.debug(f"Found due date: {due_str}")
+                except ValueError:
+                    logging.warning(f"Invalid due date format found: {due_str}")
+
         logging.debug(f"Found tags: {tags}")
         return cls(
             title=title,
             content=content,
             tags=tags,
+            due_date=due_date,
             lane=lane,
             path=file_path
         )
@@ -137,6 +150,7 @@ class Task:
                 title=new_title,
                 content=new_content,
                 tags=self.tags.copy(),
+                due_date=self.due_date,
                 lane=self.lane,
                 path=self.path.parent / f"{new_title}.md"
             )
