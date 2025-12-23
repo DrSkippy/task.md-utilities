@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  task-manager-mcp:
+    build:
+      context: ..
+      dockerfile: mcp_task_service/Dockerfile
+    container_name: task-manager-mcp
+    ports:
+      - "3003:3003"
+    volumes:
+      # Mount a local directory to persist task data
+      - ./data:/data/tasks
+      # Optional: mount config file if you want to customize settings
+      - ./config.json:/app/config.json:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - task-manager-network
+
+networks:
+  task-manager-network:
+    driver: bridge
+
+volumes:
+  task-data:
+    driver: local

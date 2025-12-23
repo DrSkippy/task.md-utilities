@@ -1,0 +1,8 @@
+# FastMCP server framework
+fastmcp>=0.1.0
+
+# OpenAI for AI features (optional)
+openai>=1.0.0
+
+# Additional dependencies
+python-dateutil>=2.8.0
