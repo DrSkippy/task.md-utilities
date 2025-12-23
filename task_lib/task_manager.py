@@ -142,7 +142,12 @@ class TaskManager:
                 # Add tags to content if present
                 if tags:
                     task.add_tag_lines_to_task_content()
+
                 task.to_file(self.base_dir)
+
+    def create_tasks_from_dict(self, task_dict_list):
+        for task_dict in task_dict_list:
+            self.ta
 
     def empty_trash(self) -> None:
         """

@@ -1,12 +1,13 @@
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
-from datetime import datetime
 
 tag_re = re.compile(r'\[tag:.*?\]')
-due_re = re.compile(r'\[due:.*?\]')
+date_line_re = re.compile(r'\[due:.*?\]')
+
 
 @dataclass
 class Task:
@@ -16,6 +17,46 @@ class Task:
     path: Path
     tags: Optional[List[str]] = None
     due_date: Optional[datetime] = None
+
+    @classmethod
+    def from_dict(cls, task_dict) -> 'Task':
+        """
+        Creates a Task instance from a dictionary representation.
+
+        This class method reconstructs a Task object from a dictionary containing
+        task data. It handles optional fields gracefully and performs date parsing
+        for the due_date field. If the due_date is present in the dictionary, it
+        attempts to parse it from the '%Y-%m-%d' format. Invalid date formats or
+        missing required keys are handled with appropriate error handling and
+        logging.
+
+        :param task_dict: Dictionary containing task data with keys such as
+            'title', 'content', 'lane', 'tags', and 'due_date'
+        :type task_dict: dict
+        :return: A new Task instance created from the dictionary data, or None if
+            required keys are missing
+        :rtype: Task or None
+        """
+        try:
+            due_date = datetime.strptime(task_dict['due_date'], '%Y-%m-%d') if 'due_date' in task_dict else None
+        except ValueError:
+            due_date = None
+        try:
+            task = cls(
+                title=task_dict['title'],
+                content=task_dict['content'],
+                lane=task_dict['lane'],
+                path=None,
+                tags=task_dict.get('tags', None),
+                due_date=due_date
+            )
+        except KeyError as e:
+            logging.error(f"Missing required key in task dictionary: {e}")
+            return None
+        # Remove Task: object always holds content string without tags!
+        task._remove_tags_from_content()
+        task._remove_date_line_from_content()
+        return task
 
     @classmethod
     def from_file(cls, file_path: Path, base_dir: Path) -> 'Task':
@@ -37,7 +78,7 @@ class Task:
             matches = tag_re.findall(line)
             if matches:
                 tags.extend([tag.strip('[]').split(":")[1].strip() for tag in matches])
-            due_matches = due_re.findall(line)
+            due_matches = date_line_re.findall(line)
             if due_matches:
                 due_str = due_matches[0].strip('[]').split(":")[1].strip()
                 try:
@@ -46,9 +87,10 @@ class Task:
                     logging.debug(f"Found due date: {due_str}")
                 except ValueError:
                     logging.warning(f"Invalid due date format found: {due_str}")
+                # Task object always holds content string without tags!
 
         logging.debug(f"Found tags: {tags}")
-        return cls(
+        task = cls(
             title=title,
             content=content,
             tags=tags,
@@ -56,14 +98,78 @@ class Task:
             lane=lane,
             path=file_path
         )
+        # Remove Task: object always holds content string without tags!
+        task._remove_tags_from_content()
+        task._remove_date_line_from_content()
+        return task
 
-    def _create_tag_lines(self) -> Optional[str]:
+    def _create_date_line_str(self):
         """
-        Generates tag lines from a list of tags if they exist. Each tag is formatted
-        as `[tag:<tag>]` and tag lines are concatenated with newline characters.
+        Generates a date line for the task content, formatted as a markdown comment.
 
-        :return: A string of concatenated tag lines if tags are present,
-            otherwise None.
+        :return: A string representing the date line if a due date is set, otherwise None.
+        :rtype: Optional[str]
+        """
+        if self.due_date:
+            return f"[due:{self.due_date.strftime('%Y-%m-%d')}]"
+        return None
+
+    def _remove_date_line_from_content(self) -> None:
+        """
+        Removes date line entries from the content by filtering out lines matching
+        a date pattern.
+
+        This method splits the content into individual lines, filters out any lines
+        that match the date line regular expression pattern, and rejoins the
+        remaining lines back into a single string.
+
+        :return: Content string with date lines removed
+        :rtype: str
+        """
+        lines = self.content.split('\n')
+        filtered_lines = [line for line in lines if not date_line_re.match(line)]
+        result = '\n'.join(filtered_lines)
+        self.content = result
+
+    def add_date_line_to_task_content(self, content=None):
+        """
+        Adds a formatted date line to the beginning of task content.
+
+        Creates a date line string and prepends it to either the provided content
+        parameter or the instance's content attribute. The date line is separated
+        from the content by two newline characters. If no date line can be created,
+        the original content is returned unchanged.
+
+        :param content: Optional content string to which the date line should be
+            prepended. If not provided, uses the instance's content attribute
+        :type content: str or None
+        :return: The content with the date line prepended, or the original content
+            if no date line was created
+        :rtype: str
+        """
+        date_line = self._create_date_line_str()
+        result = content if content else self.content
+        if date_line:
+            if content:
+                result = f"{date_line}\n\n{content}"
+            else:
+                result = f"{date_line}\n\n{self.content}"
+        return result
+
+    def _create_tag_lines_str(self) -> Optional[str]:
+        """
+        Create a formatted string representation of tags with each tag on a
+        separate line.
+
+        This method processes the tags collection and formats each tag into a
+        bracketed tag line format. Each tag is prefixed with "tag:" and wrapped
+        in square brackets. The resulting tag lines are joined with newline
+        characters to create a multi-line string. If no tags are present, the
+        method returns None. Debug logging is performed to track the tag
+        formatting process.
+
+        :return: A multi-line string with formatted tag lines, or None if no
+                 tags exist
         :rtype: Optional[str]
         """
         if not self.tags:
@@ -72,24 +178,7 @@ class Task:
         logging.debug(f"Creating tag lines: {tag_strings}")
         return '\n'.join(tag_strings)
 
-    def add_tag_lines_to_task_content(self) -> str:
-        """
-        Adds generated tag lines to the content of a task and updates the content.
-
-        This function generates tag lines using an internal private method
-        and prepends them to the current content of the task. If no tag lines
-        are generated, the content remains unchanged.
-
-        :return: Updated task content with tag lines prepended.
-        :rtype: str
-        """
-        tag_lines = self._create_tag_lines()
-        if tag_lines:
-            result = f"{tag_lines}\n\n{self.content}"
-            self.content = result
-        return self.content
-
-    def _remove_tags_from_content(self) -> str:
+    def _remove_tags_from_content(self) -> None:
         """
         Removes lines matching a specific tag pattern from the content. The method scans
         through each line in the content, filters out lines that match the tag pattern,
@@ -101,6 +190,33 @@ class Task:
         lines = self.content.split('\n')
         filtered_lines = [line for line in lines if not tag_re.match(line)]
         result = '\n'.join(filtered_lines).strip()
+        self.content = result
+
+    def add_tag_lines_to_task_content(self, content=None) -> str:
+        """
+        Adds tag lines to the task content by prepending formatted tag
+        information to either the provided content or the instance's
+        content attribute.
+
+        This method generates a formatted string of tag lines and combines
+        it with the specified content or falls back to the instance's
+        content. If no tag lines exist, the method returns the content
+        unchanged.
+
+        :param content: Optional content string to prepend tag lines to. If
+            not provided, uses the instance's content attribute.
+        :type content: str, optional
+        :return: Content string with tag lines prepended if tags exist,
+            separated by double newlines.
+        :rtype: str
+        """
+        tag_lines = self._create_tag_lines_str()
+        result = content if content else self.content
+        if tag_lines:
+            if content:
+                result = f"{tag_lines}\n\n{content}"
+            else:
+                result = f"{tag_lines}\n\n{self.content}"
         return result
 
     def to_file(self, base_dir: Path) -> None:
@@ -119,7 +235,9 @@ class Task:
         task_dir = base_dir / self.lane
         task_dir.mkdir(exist_ok=True)
         file_path = task_dir / f"{self.title}.md"
-        file_path.write_text(self.content)
+        # Restore tags and due date to text formatted task
+        content = self.add_tag_lines_to_task_content(self.add_date_line_to_task_content())
+        file_path.write_text(content)
         logging.debug(f"Writing task '{self.title}' to '{file_path}'")
 
     def split(self) -> List['Task']:
@@ -135,21 +253,20 @@ class Task:
         :return: A list of new tasks created from the split.
         :rtype: List[Task]
         """
-        _content = self._remove_tags_from_content()
-        if '[[split]]' not in _content:
+        if '[[split]]' not in self.content:
             return [self]
-        parts = _content.split('[[split]]')
+        parts = self.content.split('[[split]]')
         new_tasks = []
+        common_tags = self.tags.copy() if self.tags else []
+        common_tags.append("multi-story feature")
         for i, part in enumerate(parts, 1):
             new_title = f"{i}-{self.title}"
             new_content = part.strip()
             # Preserve tags if they exist
-            if self.tags:
-                new_content = f"{self._create_tag_lines()}\n\n{new_content}"
             new_task = Task(
                 title=new_title,
                 content=new_content,
-                tags=self.tags.copy(),
+                tags=common_tags,
                 due_date=self.due_date,
                 lane=self.lane,
                 path=self.path.parent / f"{new_title}.md"

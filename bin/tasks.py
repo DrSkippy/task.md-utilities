@@ -33,7 +33,6 @@ dictConfig({
 })
 
 
-
 def main():
     parser = argparse.ArgumentParser(description='Task Manager Utility')
     parser.add_argument('--config', type=str,
@@ -63,7 +62,7 @@ def main():
         try:
             config = Config(Path(args.config))
         except FileNotFoundError as e:
-            print(f"Error: {e}")
+            logging.error(f"Error: {e}")
             sys.exit(1)
     
     # Override base_dir from command line if specified
