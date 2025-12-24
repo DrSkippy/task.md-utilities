@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+logger = logging.getLogger("mcp-task-service")
 tag_re = re.compile(r'\[tag:.*?\]')
 date_line_re = re.compile(r'\[due:.*?\]')
 
@@ -28,7 +29,7 @@ class Task:
         for the due_date field. If the due_date is present in the dictionary, it
         attempts to parse it from the '%Y-%m-%d' format. Invalid date formats or
         missing required keys are handled with appropriate error handling and
-        logging.
+        logger.
 
         :param task_dict: Dictionary containing task data with keys such as
             'title', 'content', 'lane', 'tags', and 'due_date'
@@ -51,7 +52,7 @@ class Task:
                 due_date=due_date
             )
         except KeyError as e:
-            logging.error(f"Missing required key in task dictionary: {e}")
+            logger.error(f"Missing required key in task dictionary: {e}")
             return None
         # Remove Task: object always holds content string without tags!
         task._remove_tags_from_content()
@@ -70,7 +71,7 @@ class Task:
         content = file_path.read_text()
         title = file_path.stem
         lane = file_path.parent.name
-        logging.debug(f"Loading task '{title}' from lane '{lane}'")
+        logger.debug(f"Loading task '{title}' from lane '{lane}'")
         # Extract tags if present
         tags = []
         due_date = None
@@ -84,12 +85,12 @@ class Task:
                 try:
                     # Validate date format
                     due_date = datetime.strptime(due_str, '%Y-%m-%d')
-                    logging.debug(f"Found due date: {due_str}")
+                    logger.debug(f"Found due date: {due_str}")
                 except ValueError:
-                    logging.warning(f"Invalid due date format found: {due_str}")
+                    logger.warning(f"Invalid due date format found: {due_str}")
                 # Task object always holds content string without tags!
 
-        logging.debug(f"Found tags: {tags}")
+        logger.debug(f"Found tags: {tags}")
         task = cls(
             title=title,
             content=content,
@@ -165,7 +166,7 @@ class Task:
         bracketed tag line format. Each tag is prefixed with "tag:" and wrapped
         in square brackets. The resulting tag lines are joined with newline
         characters to create a multi-line string. If no tags are present, the
-        method returns None. Debug logging is performed to track the tag
+        method returns None. Debug logger is performed to track the tag
         formatting process.
 
         :return: A multi-line string with formatted tag lines, or None if no
@@ -175,7 +176,7 @@ class Task:
         if not self.tags:
             return None
         tag_strings = [f"[tag:{tag}]" for tag in self.tags]
-        logging.debug(f"Creating tag lines: {tag_strings}")
+        logger.debug(f"Creating tag lines: {tag_strings}")
         return '\n'.join(tag_strings)
 
     def _remove_tags_from_content(self) -> None:
@@ -238,7 +239,7 @@ class Task:
         # Restore tags and due date to text formatted task
         content = self.add_tag_lines_to_task_content(self.add_date_line_to_task_content())
         file_path.write_text(content)
-        logging.debug(f"Writing task '{self.title}' to '{file_path}'")
+        logger.debug(f"Writing task '{self.title}' to '{file_path}'")
 
     def split(self) -> List['Task']:
         """

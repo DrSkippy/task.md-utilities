@@ -2,19 +2,18 @@ version: '3.8'
 
 services:
   task-manager-mcp:
-    build:
-      context: ..
-      dockerfile: mcp_task_service/Dockerfile
+    image: localhost:5000/task-manager-mcp:latest
     container_name: task-manager-mcp
     ports:
       - "3003:3003"
     volumes:
       # Mount a local directory to persist task data
-      - ./data:/data/tasks
-      # Optional: mount config file if you want to customize settings
-      - ./config.json:/app/config.json:ro
+      - /mnt/raid1/lib/tasks.md/tasks:/data/tasks
     environment:
       - PYTHONUNBUFFERED=1
+      - PORT=3003
+      - HOST=0.0.0.0
+
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]

@@ -39,15 +39,6 @@ class TestTaskManager(unittest.TestCase):
         self.assertEqual(self.task_manager.trash_dir, self.test_dir / "Trash")
         self.assertTrue(self.task_manager.trash_dir.exists())
 
-    def test_task_manager_with_openai_config(self):
-        """Test TaskManager initialization with OpenAI config."""
-        config = Config()
-        config.base_dir = self.test_dir
-        config.openai_api_key = "test-api-key"
-
-        with patch('task_lib.task_manager.openai') as mock_openai:
-            task_manager = TaskManager(config)
-            mock_openai.api_key = "test-api-key"
 
     def test_get_all_tasks_empty(self):
         """Test getting all tasks from empty lanes."""

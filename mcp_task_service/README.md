@@ -38,11 +38,16 @@ docker-compose down
 docker build -t task-manager-mcp -f mcp_task_service/Dockerfile .
 ```
 
+```bash
+docker build -t localhost:5000/task-manager-mcp:latest -f mcp_task_service/Dockerfile .
+docker push localhost:5000/task-manager-mcp:latest
+```
+
 2. Run the container:
 ```bash
 docker run -d \
   -p 3003:3003 \
-  -v $(pwd)/mcp_task_service/data:/data/tasks \
+  -v $(pwd)/test_tasks:/data/tasks \
   --name task-manager-mcp \
   task-manager-mcp
 ```
@@ -68,18 +73,8 @@ Create a `config.json` file in the `mcp_task_service` directory:
 
 ```json
 {
-  "base_dir": "/data/tasks",
-  "openai": {
-    "api_key": "your-api-key-here",
-    "model": "gpt-4"
-  }
+  "base_dir": "/data/tasks"
 }
-```
-
-Mount it in docker-compose.yml (already configured):
-```yaml
-volumes:
-  - ./config.json:/app/config.json:ro
 ```
 
 ## Tool Usage Examples

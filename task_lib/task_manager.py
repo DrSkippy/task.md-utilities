@@ -1,20 +1,19 @@
 import csv
-import openai
 import shutil
+import logging
 from pathlib import Path
 from typing import List, Dict
 
 from .config import Config
 from .task import Task
 
+logger = logging.getLogger("mcp-task-service")
+
 
 class TaskManager:
     def __init__(self, config: Config):
         """
         Initializes an instance of the class with configuration settings.
-
-        This constructor sets up necessary directories and configures the OpenAI API
-        if an API key is provided in the given configuration.
 
         :param config: The configuration object that contains required settings
             for the class initialization, such as base directory and OpenAI API key.
@@ -25,8 +24,6 @@ class TaskManager:
         self.trash_dir = self.base_dir / "Trash"
         self.trash_dir.mkdir(exist_ok=True)
         # Configure OpenAI if API key is available
-        if config.openai_api_key:
-            openai.api_key = config.openai_api_key
 
     def get_all_tasks(self) -> Dict[str, List[Task]]:
         """
@@ -94,6 +91,7 @@ class TaskManager:
             for task in tasks:
                 if '[[split]]' in task.content:
                     # Create new split tasks
+                    logger.info(f"Splitting task '{task.title}' into smaller tasks")
                     new_tasks = task.split()
                     for new_task in new_tasks:
                         new_task.to_file(self.base_dir)
@@ -128,9 +126,9 @@ class TaskManager:
                     try:
                         # Validate date format
                         due_date = datetime.strptime(due_str, '%Y-%m-%d')
-                        logging.debug(f"Found due date: {due_str}")
+                        logger.info(f"Found due date: {due_str}")
                     except ValueError:
-                        logging.warning(f"Invalid due date format found: {due_str}")
+                        logger.warning(f"Invalid due date format found: {due_str}")
                 task = Task(
                     title=title,
                     content=content,
@@ -142,7 +140,6 @@ class TaskManager:
                 # Add tags to content if present
                 if tags:
                     task.add_tag_lines_to_task_content()
-
                 task.to_file(self.base_dir)
 
     def create_tasks_from_dict(self, task_dict_list):
@@ -164,7 +161,7 @@ class TaskManager:
         """
         for file in self.trash_dir.glob("*.md"):
             file.unlink()
-        print(f"Removed {len(list(self.trash_dir.glob('*.md')))} files from trash")
+        logger.info(f"Removed {len(list(self.trash_dir.glob('*.md')))} files from trash")
 
     def change_lane(self, task_title: str, new_lane: str) -> None:
         """
@@ -193,10 +190,10 @@ class TaskManager:
                 # Move the file to the new lane
                 new_path = new_lane_dir / task_file.name
                 shutil.move(str(task_file), str(new_path))
-                print(f"Moved task '{task_title}' from '{lane_dir.name}' to '{new_lane}'")
+                logger.info(f"Moved task '{task_title}' from '{lane_dir.name}' to '{new_lane}'")
                 break
         if not task_found:
-            print(f"Error: Task '{task_title}' not found in any lane")
+            logger.error(f"Error: Task '{task_title}' not found in any lane")
 
     def calculate_statistics(self) -> Dict:
         """

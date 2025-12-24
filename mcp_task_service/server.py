@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-__version__="0.1.0"
-__author__="Scott Hendrickson"
-__email__="scott@drskippy.net"
+__version__ = "0.1.0"
+__author__ = "Scott Hendrickson"
+__email__ = "scott@drskippy.net"
 
 """
 FastMCP-based MCP server for task management.
@@ -10,8 +10,8 @@ Provides tools for managing tasks using the task_lib library.
 
 import json
 import logging
-import sys
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -20,16 +20,19 @@ from typing import Optional, List, Dict, Any
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mcp.server.fastmcp import FastMCP
+from starlette.responses import PlainTextResponse
+from starlette.requests import Request
+
 from task_lib.config import Config
 from task_lib.task_manager import TaskManager
 from task_lib.task import Task
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("mcp-task-service")
 
 # Create FastMCP server with streamable HTTP support
 port = int(os.getenv("PORT", "3003"))
@@ -420,11 +423,16 @@ def get_statistics() -> str:
         return json.dumps({"error": str(e)})
 
 
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> PlainTextResponse:
+    return PlainTextResponse("OK")
+
+
 if __name__ == "__main__":
     # Run the MCP server
-    logging.info("#"*70)
+    logging.info("#" * 70)
     logging.info("Starting MCP server for HENDRICKSON KANBAN task management")
     logging.info(f"Server version={__version__}")
     logging.info(f"Server created by {__author__}")
-    logging.info("#"*70)
+    logging.info("#" * 70)
     mcp.run(transport="streamable-http")

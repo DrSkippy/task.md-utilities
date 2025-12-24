@@ -23,6 +23,7 @@ COPY ./task_lib /app/task_lib
 
 # Copy server code
 COPY ./mcp_task_service/server.py .
+COPY ./config.json .
 
 # Create data directory for tasks
 RUN mkdir -p /data/tasks
