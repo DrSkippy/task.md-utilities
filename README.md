@@ -128,7 +128,8 @@ The utility can be configured using a JSON configuration file. Use the `--config
 
 ```json
 {
-  "base_dir": "/path/to/tasks"
+  "base_dir_local": "server/path/to/tasks",
+  "base_dir": "/data/tasks/"
 }
 ```
 
