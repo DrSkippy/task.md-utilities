@@ -26,8 +26,14 @@ This utility helps manage tasks that are organized in "lanes" (directories). Eac
 
 ## Installation
 
+**Prerequisites:** Python ≥3.10 and [Poetry](https://python-poetry.org/) must be installed.
+
 1. Clone this repository
-2. Make the utility executable:
+2. Install dependencies:
+   ```bash
+   poetry install
+   ```
+3. Make the utility executable:
    ```bash
    chmod +x bin/tasks.py
    ```
@@ -59,6 +65,19 @@ Display all tasks in all lanes:
 ./bin/tasks.py --show-tasks
 ```
 
+Example output:
+```
+Lane: In Progress
+-----------------
+Title: Implement login
+Tags: frontend, auth
+Due Date: 2026-02-01
+----------------------------------------
+Title: Setup database
+Tags: backend, db
+----------------------------------------
+```
+
 ### Add a Lane
 Create a new lane (directory) for organizing tasks:
 ```bash
@@ -71,9 +90,10 @@ Split tasks that contain the `[[split]]` marker into multiple tasks:
 ./bin/tasks.py --split-tasks
 ```
 When a task is split:
-- New tasks are created with names like "1-original-title", "2-original-title", etc.
+- The content is divided at each `[[split]]` marker; each segment becomes the body of a new task
+- New tasks are named `{n}-{original-title}.md` — e.g., if the original file is `my-feature.md`, the results are `1-my-feature.md`, `2-my-feature.md`, etc.
 - The original task is moved to the "Trash" directory
-- Tags are preserved in the new tasks
+- Tags from the original task are preserved and a `multi-story feature` tag is added
 
 ### Create Tasks from CSV
 Create multiple tasks from a CSV file:
@@ -110,11 +130,39 @@ Display statistics about your tasks including lane counts, tasks per lane, and t
 ./bin/tasks.py --summary
 ```
 
+Example output:
+```
+==================================================
+TASK STATISTICS SUMMARY
+==================================================
+
+Total number of lanes: 3
+
+Tasks per lane:
+------------------------------
+  Backlog: 5 tasks
+  Done: 12 tasks
+  In Progress: 3 tasks
+
+Tag occurrence counts:
+------------------------------
+  frontend: 4 occurrences
+  urgent: 2 occurrences
+  backend: 1 occurrence
+
+Due Date occurrence counts:
+------------------------------
+  No Due Date: 14 occurrences
+  2026-02-15: 6 occurrences
+```
+
 ### Specify Base Directory
 All commands can be run with a different base directory:
 ```bash
 ./bin/tasks.py --base-dir /path/to/tasks [other options]
 ```
+
+If neither `--base-dir` nor a config file is provided, the CLI defaults to the **current working directory**.
 
 ## Configuration
 
@@ -124,19 +172,19 @@ The utility can be configured using a JSON configuration file. Use the `--config
 ./bin/tasks.py --config config.json [other options]
 ```
 
+When both `--config` and `--base-dir` are provided, `--base-dir` takes precedence over the `base_dir` value in the config file.
+
 ### Configuration File Format
 
 ```json
 {
-  "base_dir_local": "server/path/to/tasks",
-  "base_dir": "/data/tasks/"
+  "base_dir": "/data/tasks"
 }
 ```
 
 Configuration options:
-- `base_dir`: Base directory for tasks (can be overridden with `--base-dir`)
-- `openai.api_key`: OpenAI API key for AI processing (currently reserved for future features)
-- `openai.model`: OpenAI model to use (default: "gpt-3.5-turbo")
+- `base_dir`: Base directory for tasks (overridden by `--base-dir` on the command line)
+- `openai.api_key` / `openai.model`: Reserved for future features; not currently used by any commands
 
 ## Task File Format
 
@@ -175,18 +223,18 @@ base_directory/
 
 2. Split a task that contains multiple items:
 ```markdown
-# Original task.md content:
+# my-feature.md content:
 [tag:project]
 [tag:urgent]
 
 First item [[split]] Second item [[split]] Third item
 ```
-After running `--split-tasks`, this will create three new tasks:
-- `1-original.md`
-- `2-original.md`
-- `3-original.md`
+After running `--split-tasks`, this creates three new tasks in the same lane:
+- `1-my-feature.md` — content: "First item"
+- `2-my-feature.md` — content: "Second item"
+- `3-my-feature.md` — content: "Third item"
 
-Each split task will preserve the original tags and add a `multi-story feature` tag.
+Each split task preserves the original tags and adds a `multi-story feature` tag.
 
 3. Create tasks from a CSV file:
 ```csv
@@ -201,7 +249,17 @@ The HENDRICKSON KANBAN system can be accessed through an MCP (Model Context Prot
 
 ### Starting the MCP Server
 
-Run the MCP server using:
+#### Docker Compose (Recommended)
+
+```bash
+cd mcp_task_service
+docker-compose up -d
+```
+
+See [`mcp_task_service/README.md`](mcp_task_service/README.md) for full Docker deployment instructions.
+
+#### Running Locally
+
 ```bash
 python mcp_task_service/server.py
 ```
@@ -215,21 +273,39 @@ HOST=localhost PORT=8080 python mcp_task_service/server.py
 
 The MCP server looks for a `config.json` file in the current working directory. If not found, it defaults to using `/data/tasks` as the base directory.
 
+### Connecting an MCP Client
+
+To connect Claude Desktop, Claude Code, or Cursor, add the server to your MCP client configuration. The server uses the streamable-HTTP transport at `http://localhost:3003/mcp`.
+
+**Claude Desktop / Claude Code** (`claude_desktop_config.json` or `.mcp.json`):
+```json
+{
+  "mcpServers": {
+    "task-manager": {
+      "url": "http://localhost:3003/mcp"
+    }
+  }
+}
+```
+
 ### Available MCP Tools
 
 The MCP server exposes the following tools:
 
 #### 1. add_task_from_json
-Add a new task to the system.
+Add a new task to the system. The entire task definition must be passed as a **JSON string** in the `task_json` parameter:
 ```json
 {
-  "title": "Implement feature X",
-  "content": "Detailed description of the task",
-  "lane": "In Progress",
-  "tags": ["frontend", "urgent"],
-  "due_date": "2026-02-15"
+  "task_json": "{\"title\": \"Implement feature X\", \"content\": \"Detailed description\", \"lane\": \"In Progress\", \"tags\": [\"frontend\", \"urgent\"], \"due_date\": \"2026-02-15\"}"
 }
 ```
+
+The JSON string must include:
+- `title` (required): Task title
+- `content` (required): Task content
+- `lane` (required): Lane name
+- `tags` (optional): Array of tag strings
+- `due_date` (optional): Due date in YYYY-MM-DD format
 
 #### 2. move_task_to_lane
 Move a task from its current lane to a new lane.
@@ -237,12 +313,40 @@ Move a task from its current lane to a new lane.
 
 #### 3. list_lanes
 List all available lanes and their task counts.
-- **Returns**: JSON with lane names and task counts
+
+Example response:
+```json
+{
+  "lanes": [
+    {"name": "Backlog", "task_count": 5},
+    {"name": "In Progress", "task_count": 3},
+    {"name": "Done", "task_count": 12}
+  ],
+  "total_lanes": 3
+}
+```
 
 #### 4. list_tasks
 List tasks with optional filtering.
 - **Parameters**: `lane` (optional), `tag` (optional)
-- **Returns**: JSON array of tasks with all their properties
+
+Example response:
+```json
+{
+  "tasks": [
+    {
+      "title": "Implement login",
+      "lane": "In Progress",
+      "content": "Create login form with validation",
+      "tags": ["frontend", "auth"],
+      "due_date": "2026-02-01",
+      "path": "/data/tasks/In Progress/Implement login.md"
+    }
+  ],
+  "count": 1,
+  "filters": {"lane": "In Progress", "tag": null}
+}
+```
 
 #### 5. update_task
 Update a task's properties.
@@ -258,11 +362,17 @@ Split all tasks containing the `[[split]]` marker into multiple subtasks.
 - **Returns**: Summary of split operations performed
 
 #### 7. get_statistics
-Get comprehensive statistics about tasks including:
-- Number of lanes
-- Tasks per lane
-- Tag occurrence counts
-- Due date distribution
+Get comprehensive statistics about tasks.
+
+Example response:
+```json
+{
+  "num_lanes": 3,
+  "tasks_per_lane": {"Backlog": 5, "In Progress": 3, "Done": 12},
+  "tag_counts": {"frontend": 4, "urgent": 2, "backend": 1},
+  "due_date_counts": {"2026-02-15": 6, "No Due Date": 14}
+}
+```
 
 ### Health Check
 
@@ -282,8 +392,8 @@ The `bin/tag-utility.py` script helps convert tasks from the old tag format (`ta
 
 **Usage:**
 1. Edit the script to set your task directory path
-2. Set `dryrun = True` to preview changes without modifying files
-3. Set `dryrun = False` to perform the actual conversion
+2. Set `dryrun = True` to preview changes; output is printed to stdout. Note: the script also opens a hardcoded output file at `/home/scott/dryrun_output.md` — edit this path before running if needed
+3. Set `dryrun = False` to perform the actual conversion (writes output files in-place)
 4. Run the script: `python bin/tag-utility.py`
 
 **Note:** This utility is primarily for migrating existing task files to the new format.
