@@ -128,11 +128,7 @@ The utility can be configured using a JSON configuration file. Use the `--config
 
 ```json
 {
-  "base_dir": "/path/to/tasks",
-  "openai": {
-    "api_key": "your-api-key-here",
-    "model": "gpt-3.5-turbo"
-  }
+  "base_dir": "/path/to/tasks"
 }
 ```
 
