@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   task-manager-mcp:
     image: localhost:5000/task-manager-mcp:latest
