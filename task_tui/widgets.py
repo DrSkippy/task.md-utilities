@@ -10,8 +10,8 @@ class TaskItem(ListItem):
     """A list item representing a single task."""
 
     def __init__(self, task: dict) -> None:
-        super().__init__()
         self._task_data = task
+        super().__init__()
 
     @property
     def task(self) -> dict:
@@ -52,9 +52,9 @@ class LaneColumn(Static):
     """
 
     def __init__(self, lane_name: str, tasks: list[dict]) -> None:
-        super().__init__()
         self._lane_name = lane_name
         self._tasks = tasks
+        super().__init__()
 
     @property
     def lane_name(self) -> str:

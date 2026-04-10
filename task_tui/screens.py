@@ -65,11 +65,12 @@ class DetailScreen(Screen):
     """
 
     def __init__(self, task: dict) -> None:
+        # Set instance data BEFORE super().__init__() so compose() can access it
+        self._task_data = task
         super().__init__()
-        self._task_data_data = task
 
     def compose(self) -> ComposeResult:
-        t = self._task_data_data
+        t = self._task_data
         tags = ", ".join(t.get("tags") or []) or "—"
         due = t.get("due_date") or "—"
         yield Label(f" {t.get('title', '')}  [Lane: {t.get('lane', '')}]", id="detail-header")
@@ -137,10 +138,11 @@ class TaskFormScreen(Screen):
     """
 
     def __init__(self, task: Optional[dict], lanes: list[str]) -> None:
-        super().__init__()
-        self._task_data_data = task
+        # Set instance data BEFORE super().__init__() so compose() can access it
+        self._task_data = task
         self._lanes = lanes
         self._mode = "update" if task else "create"
+        super().__init__()
 
     def compose(self) -> ComposeResult:
         t = self._task_data or {}
@@ -250,8 +252,8 @@ class ConfirmScreen(Screen):
     """
 
     def __init__(self, message: str) -> None:
-        super().__init__()
         self._message = message
+        super().__init__()
 
     def compose(self) -> ComposeResult:
         with Vertical(id="confirm-box"):
@@ -303,8 +305,8 @@ class FilterScreen(Screen):
     """
 
     def __init__(self, current: Optional[dict] = None) -> None:
-        super().__init__()
         self._current = current or {}
+        super().__init__()
 
     def compose(self) -> ComposeResult:
         with Vertical(id="filter-box"):
@@ -365,8 +367,8 @@ class MoveScreen(Screen):
     """
 
     def __init__(self, lanes: list[str]) -> None:
-        super().__init__()
         self._lanes = lanes
+        super().__init__()
 
     def compose(self) -> ComposeResult:
         with Vertical(id="move-box"):
