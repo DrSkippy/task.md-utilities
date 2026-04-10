@@ -43,6 +43,8 @@ task.md-utilities/
 ├── bin/
 │   ├── tasks               # CLI — TUI (no args) or subcommands (scripting)
 │   └── tag-utility.py      # One-time tag format migration utility
+├── docs/
+│   └── screenshot.svg      # TUI kanban board screenshot
 ├── task_lib/
 │   ├── api_client.py       # Shared HTTP helpers (used by CLI and TUI)
 │   ├── config.py           # Configuration (YAML)
@@ -162,6 +164,8 @@ tasks
 
 Launches a full-screen kanban board. Lanes are displayed as side-by-side columns; tasks are listed under each lane.
 
+![Kanban Board](docs/screenshot.svg)
+
 #### Keyboard navigation
 
 | Key | Action |
@@ -176,6 +180,7 @@ Launches a full-screen kanban board. Lanes are displayed as side-by-side columns
 | `F4` | Delete selected task (confirm prompt) |
 | `F5` | Filter tasks (by lane, tag, or title substring) |
 | `F6` | Move selected task to another lane |
+| `F7` | Open / close task detail view |
 | `F8` | Refresh board from the API |
 | `F9` | Quit |
 
@@ -251,6 +256,7 @@ Add to your Claude Desktop / Claude Code config (`~/.claude/claude_desktop_confi
 {
   "mcpServers": {
     "task-manager": {
+      "type": "http",
       "url": "http://localhost:3003/mcp"
     }
   }
