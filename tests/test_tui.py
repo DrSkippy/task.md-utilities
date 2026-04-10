@@ -64,6 +64,6 @@ async def test_f10_quits():
          patch("task_tui.api.fetch_tasks", return_value=MOCK_TASKS):
         async with _make_app().run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.3)
-            await pilot.press("f10")
+            await pilot.press("f9")
         # If we reach here the app exited cleanly
         assert True

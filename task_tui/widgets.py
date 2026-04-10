@@ -100,7 +100,7 @@ class FunctionKeyBar(Static):
     """
 
     # Updated dynamically by the app when context changes
-    BOARD_KEYS = "F1 Help  F2 New  F3 Edit  F4 Delete  F5 Filter  F6 Move  F7 Detail  F10 Quit"
+    BOARD_KEYS = "F1 Help  F2 New  F3 Edit  F4 Delete  F5 Filter  F6 Move  F7 Detail  F9 Quit"
     DETAIL_KEYS = "F3 Edit  F4 Delete  F6 Move  F7 Close  Esc Back"
 
     def __init__(self) -> None:
