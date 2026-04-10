@@ -66,10 +66,10 @@ class DetailScreen(Screen):
 
     def __init__(self, task: dict) -> None:
         super().__init__()
-        self._task = task
+        self._task_data_data = task
 
     def compose(self) -> ComposeResult:
-        t = self._task
+        t = self._task_data_data
         tags = ", ".join(t.get("tags") or []) or "—"
         due = t.get("due_date") or "—"
         yield Label(f" {t.get('title', '')}  [Lane: {t.get('lane', '')}]", id="detail-header")
@@ -138,12 +138,12 @@ class TaskFormScreen(Screen):
 
     def __init__(self, task: Optional[dict], lanes: list[str]) -> None:
         super().__init__()
-        self._task = task
+        self._task_data_data = task
         self._lanes = lanes
         self._mode = "update" if task else "create"
 
     def compose(self) -> ComposeResult:
-        t = self._task or {}
+        t = self._task_data or {}
         title_val = t.get("title", "")
         content_val = t.get("content", "")
         current_lane = t.get("lane", self._lanes[0] if self._lanes else "")
@@ -152,7 +152,7 @@ class TaskFormScreen(Screen):
 
         lane_options = [(lane, lane) for lane in self._lanes]
 
-        heading = "Edit Task" if self._task else "New Task"
+        heading = "Edit Task" if self._task_data else "New Task"
         with Vertical(id="form-container"):
             yield Label(heading, id="form-heading")
             yield Label("Title", classes="field-label")
@@ -210,8 +210,8 @@ class TaskFormScreen(Screen):
             "tags": tags,
             "due_date": due_raw or None,
         }
-        if self._mode == "update" and self._task:
-            result["_original_title"] = self._task["title"]
+        if self._mode == "update" and self._task_data:
+            result["_original_title"] = self._task_data["title"]
 
         self.dismiss(result)
 
