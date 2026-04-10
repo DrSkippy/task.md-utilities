@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "task-manager": {
+      "url": "http://localhost:3003/mcp"
+    }
+  }
+}
