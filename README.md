@@ -176,6 +176,7 @@ Launches a full-screen kanban board. Lanes are displayed as side-by-side columns
 | `F4` | Delete selected task (confirm prompt) |
 | `F5` | Filter tasks (by lane, tag, or title substring) |
 | `F6` | Move selected task to another lane |
+| `F8` | Refresh board from the API |
 | `F9` | Quit |
 
 Active filters are shown in a status bar at the top; press `F5` again to change or clear them.

@@ -34,6 +34,7 @@ class KanbanApp(App):
         Binding("f5", "filter_tasks", "Filter"),
         Binding("f6", "move_task", "Move"),
         Binding("f7", "view_task", "Detail"),
+        Binding("f8", "refresh", "Refresh"),
         Binding("f9", "quit", "Quit"),
         Binding("left", "prev_lane", "Prev Lane", show=False),
         Binding("right", "next_lane", "Next Lane", show=False),
@@ -198,6 +199,10 @@ class KanbanApp(App):
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
+
+    def action_refresh(self) -> None:
+        self._reload()
+        self.notify("Refreshing…", timeout=1)
 
     def action_show_help(self) -> None:
         self.notify(
