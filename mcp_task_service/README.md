@@ -1,188 +1,120 @@
 # Task Manager MCP Service
 
-A FastMCP-based Model Context Protocol (MCP) server for managing tasks using the task.md format.
+FastMCP server exposing the HENDRICKSON KANBAN task management system over the [Model Context Protocol](https://modelcontextprotocol.io/). AI assistants (Claude, Cursor, etc.) can use this server to read and manage tasks without direct filesystem access.
 
-## Features
+## Tools
 
-The service provides the following tools:
-
-- **add_task_from_json**: Create a new task from JSON data
-- **move_task_to_lane**: Move a task between lanes
-- **list_lanes**: List all available lanes with task counts
-- **list_tasks**: List tasks with optional filtering by lane and/or tag
-- **update_task**: Update task properties (content, tags, title, due date)
-- **split_tasks**: Split tasks containing `[[split]]` marker into multiple tasks
-- **get_statistics**: Get statistics about tasks (lane counts, tag usage, due dates)
+| Tool | Description |
+|------|-------------|
+| `add_task` | Create a new task with title, content, lane, optional tags and due date |
+| `get_task` | Retrieve a single task by title |
+| `update_task` | Update task fields (content, tags, title, due date) |
+| `delete_task` | Move a task to Trash (soft delete) |
+| `move_task_to_lane` | Move a task from one lane to another |
+| `list_tasks` | List tasks, optionally filtered by lane and/or tag |
+| `list_lanes` | List all lanes with task counts |
+| `add_lane` | Create a new lane |
+| `split_tasks` | Split tasks containing `[[split]]` into numbered subtasks |
+| `empty_trash` | Permanently delete all files in Trash |
+| `get_statistics` | Get lane/tag/due-date statistics |
 
 ## Quick Start
 
-### Using Docker Compose (Recommended)
+### Docker Compose (recommended)
 
-1. Build and start the service:
 ```bash
+# From the repo root:
+docker build -t localhost:5000/task-manager-mcp:latest -f mcp_task_service/Dockerfile .
+docker push localhost:5000/task-manager-mcp:latest
+
 cd mcp_task_service
 docker-compose up -d
 ```
 
-2. The service will be available on port 3003
+The server listens on **port 3003**. The MCP endpoint is at `http://<host>:3003/mcp`.
 
-3. Stop the service:
-```bash
-docker-compose down
-```
-
-### Using Docker Directly
-
-1. Build the image:
-```bash
-docker build -t task-manager-mcp -f mcp_task_service/Dockerfile .
-```
+### Running locally
 
 ```bash
-docker build -t localhost:5000/task-manager-mcp:latest -f mcp_task_service/Dockerfile .
-docker push localhost:5000/task-manager-mcp:latest
-```
-
-2. Run the container:
-```bash
-docker run -d \
-  -p 3003:3003 \
-  -v $(pwd)/test_tasks:/data/tasks \
-  --name task-manager-mcp \
-  task-manager-mcp
-```
-
-### Running Locally
-
-1. Install dependencies:
-```bash
-cd mcp_task_service
-pip install -r requirements.txt
-```
-
-2. Run the server:
-```bash
-python server.py
+pip install -r mcp_task_service/requirements.txt
+TASK_CONFIG_PATH=/path/to/config.yaml python mcp_task_service/server.py
 ```
 
 ## Configuration
 
-### Custom Configuration File
+The server reads a YAML config file. Provide the path via the `TASK_CONFIG_PATH` environment variable (default: `/app/config/config.yaml`).
 
-Create a `config.json` file in the `mcp_task_service` directory:
+```yaml
+# config.yaml
+base_dir: /data/tasks
+```
+
+Mount this file into the container as a read-only volume (see `docker-compose.yml`). Do **not** bake config into the image.
+
+### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TASK_CONFIG_PATH` | `/app/config/config.yaml` | Path to config YAML inside the container |
+| `HOST` | `0.0.0.0` | Bind address |
+| `PORT` | `3003` | Bind port |
+
+## Connecting an MCP client
+
+Add to your Claude Desktop / Claude Code config (`~/.claude/claude_desktop_config.json` or `.mcp.json`):
 
 ```json
 {
-  "base_dir": "/data/tasks"
+  "mcpServers": {
+    "task-manager": {
+      "url": "http://localhost:3003/mcp"
+    }
+  }
 }
 ```
 
-## Tool Usage Examples
+Replace `localhost` with the server hostname if running remotely (e.g. via NGINX/Cloudflare Tunnel).
 
-### add_task_from_json
+## Health check
 
-```json
-{
-  "task_json": "{\"title\": \"Example Task\", \"content\": \"Task description\", \"lane\": \"todo\", \"tags\": [\"urgent\", \"bug\"], \"due_date\": \"2025-12-31\"}"
-}
+```bash
+curl http://localhost:3003/health
+# → OK
 ```
 
-### move_task_to_lane
+## Data format
 
-```json
-{
-  "task_title": "Example Task",
-  "new_lane": "doing"
-}
+Tasks are stored as `.md` files inside lane subdirectories:
+
+```
+base_dir/
+├── Backlog/
+│   └── My Task.md
+├── In Progress/
+│   └── Another Task.md
+└── Trash/
+    └── old-task.md
 ```
 
-### list_tasks
+Each file may contain optional metadata at the top:
 
-```json
-{
-  "lane": "todo",
-  "tag": "urgent"
-}
+```markdown
+[tag:frontend]
+[tag:urgent]
+[due:2026-06-01]
+
+Task body text goes here.
 ```
-
-### update_task
-
-```json
-{
-  "task_title": "Example Task",
-  "content": "Updated content",
-  "tags": "urgent,feature",
-  "new_title": "Renamed Task",
-  "due_date": "2026-01-15"
-}
-```
-
-### split_tasks
-
-No parameters required. Splits all tasks containing `[[split]]` marker.
-
-## Data Persistence
-
-Task data is stored in the `./data` directory (or `/data/tasks` inside the container). This directory is mounted as a volume to persist data between container restarts.
-
-## Architecture
-
-- **FastMCP**: Provides the MCP server framework
-- **task_lib**: Core task management library
-- **Docker**: Containerization for easy deployment
-- **Port 3003**: Default exposed port for MCP communication
 
 ## Development
 
-### Project Structure
-
-```
-mcp_task_service/
-├── server.py           # FastMCP server implementation
-├── Dockerfile          # Docker image definition
-├── docker-compose.yml  # Docker Compose configuration
-├── requirements.txt    # Python dependencies
-├── README.md          # This file
-├── config.json        # Optional configuration file
-└── data/              # Task data storage (created on first run)
-```
-
-### Adding New Tools
-
-To add new tools, define them in `server.py` using the `@mcp.tool()` decorator:
+To add a new tool, define it in `server.py` with the `@mcp.tool()` decorator:
 
 ```python
 @mcp.tool()
-def my_new_tool(param1: str, param2: int) -> str:
-    """Tool description"""
-    # Implementation
-    return "result"
+def my_tool(param: str) -> str:
+    """One-line description. Args: param description. Returns: description."""
+    ...
 ```
 
-## Troubleshooting
-
-### Container won't start
-
-Check logs:
-```bash
-docker-compose logs -f task-manager-mcp
-```
-
-### Permission issues with data directory
-
-Ensure the data directory has correct permissions:
-```bash
-chmod -R 755 mcp_task_service/data
-```
-
-### Port 3003 already in use
-
-Change the port mapping in `docker-compose.yml`:
-```yaml
-ports:
-  - "3004:3003"  # Use port 3004 instead
-```
-
-## License
-
-Same as parent project.
+Keep tool docstrings concise — they are sent to the AI model as part of the tool schema.

@@ -1,0 +1,347 @@
+#!/usr/bin/env python3
+"""
+tasks — HENDRICKSON KANBAN command-line interface.
+
+Connects to the Task REST API to manage kanban tasks from anywhere.
+
+API URL resolution order:
+  1. --api-url flag
+  2. TASKS_API_URL environment variable
+  3. ~/.config/tasks/config.yaml  →  api_url key
+  4. Default: http://localhost:3101
+"""
+
+import os
+import sys
+from pathlib import Path
+from typing import Any, Optional
+from urllib.parse import quote
+
+import click
+import requests
+import yaml
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+console = Console()
+
+
+# ---------------------------------------------------------------------------
+# Config resolution
+# ---------------------------------------------------------------------------
+
+def resolve_api_url(flag_value: Optional[str]) -> str:
+    """Return the API base URL from the first available source."""
+    if flag_value:
+        return flag_value.rstrip("/")
+    if env := os.getenv("TASKS_API_URL"):
+        return env.rstrip("/")
+    config_path = Path.home() / ".config" / "tasks" / "config.yaml"
+    if config_path.exists():
+        data: dict = yaml.safe_load(config_path.read_text()) or {}
+        if url := data.get("api_url"):
+            return url.rstrip("/")
+    return "http://localhost:3101"
+
+
+# ---------------------------------------------------------------------------
+# HTTP helpers
+# ---------------------------------------------------------------------------
+
+def api_call(method: str, url: str, **kwargs: Any) -> Any:
+    """Make an HTTP request and return parsed JSON, or exit on error."""
+    try:
+        resp = requests.request(method, url, timeout=15, **kwargs)
+        resp.raise_for_status()
+        if resp.status_code == 204 or not resp.content:
+            return {}
+        return resp.json()
+    except requests.exceptions.ConnectionError:
+        console.print("[red]Cannot connect to API. Is the task service running?[/red]")
+        console.print(f"[dim]URL: {url}[/dim]")
+        sys.exit(1)
+    except requests.exceptions.Timeout:
+        console.print("[red]Request timed out.[/red]")
+        sys.exit(1)
+    except requests.exceptions.HTTPError as exc:
+        body = {}
+        try:
+            body = exc.response.json()
+        except Exception:
+            pass
+        msg = body.get("error") or body.get("detail") or str(exc)
+        console.print(f"[red]API error {exc.response.status_code}: {msg}[/red]")
+        sys.exit(1)
+
+
+def task_url(base: str, title: str) -> str:
+    return f"{base}/tasks/{quote(title, safe='')}"
+
+
+# ---------------------------------------------------------------------------
+# CLI group
+# ---------------------------------------------------------------------------
+
+@click.group()
+@click.option(
+    "--api-url",
+    envvar="TASKS_API_URL",
+    default=None,
+    metavar="URL",
+    help="Task API base URL. Overrides TASKS_API_URL env and config file.",
+)
+@click.pass_context
+def cli(ctx: click.Context, api_url: Optional[str]) -> None:
+    """HENDRICKSON KANBAN — manage tasks from anywhere via the Task REST API."""
+    ctx.ensure_object(dict)
+    ctx.obj["api_url"] = resolve_api_url(api_url)
+
+
+# ---------------------------------------------------------------------------
+# Tasks commands
+# ---------------------------------------------------------------------------
+
+@cli.command("show")
+@click.option("--lane", default=None, metavar="LANE", help="Filter by lane name (case-insensitive).")
+@click.option("--tag", default=None, metavar="TAG", help="Filter by tag (case-insensitive).")
+@click.option("--string", "search", default=None, metavar="TEXT", help="Filter by title substring (case-insensitive).")
+@click.pass_context
+def cmd_show(ctx: click.Context, lane: Optional[str], tag: Optional[str], search: Optional[str]) -> None:
+    """List tasks, optionally filtered by lane, tag, and/or title substring."""
+    base = ctx.obj["api_url"]
+    params: dict = {}
+    if lane:
+        params["lane"] = lane
+    if tag:
+        params["tag"] = tag
+    if search:
+        params["search"] = search
+
+    tasks = api_call("GET", f"{base}/tasks", params=params)
+
+    if not tasks:
+        console.print("[dim]No tasks found.[/dim]")
+        return
+
+    table = Table(show_header=True, header_style="bold cyan", expand=True)
+    table.add_column("Title", style="bold")
+    table.add_column("Lane", style="magenta")
+    table.add_column("Tags", style="green")
+    table.add_column("Due Date", style="yellow")
+
+    for t in tasks:
+        tags_str = ", ".join(t.get("tags") or []) or "[dim]—[/dim]"
+        due = t.get("due_date") or "[dim]—[/dim]"
+        table.add_row(t["title"], t["lane"], tags_str, due)
+
+    console.print(table)
+    console.print(f"[dim]{len(tasks)} task(s)[/dim]")
+
+
+@cli.command("get")
+@click.argument("title")
+@click.pass_context
+def cmd_get(ctx: click.Context, title: str) -> None:
+    """Show full details for a single task."""
+    base = ctx.obj["api_url"]
+    t = api_call("GET", task_url(base, title))
+
+    tags_str = ", ".join(t.get("tags") or []) or "—"
+    due = t.get("due_date") or "—"
+    subtitle = f"Lane: [magenta]{t['lane']}[/magenta]  |  Tags: [green]{tags_str}[/green]  |  Due: [yellow]{due}[/yellow]"
+    console.print(Panel(t["content"], title=f"[bold]{t['title']}[/bold]", subtitle=subtitle))
+
+
+@cli.command("add")
+@click.option("--title", prompt=True, help="Task title.")
+@click.option("--content", prompt=True, help="Task body text.")
+@click.option("--lane", prompt=True, help="Target lane.")
+@click.option(
+    "--tags",
+    default="",
+    metavar="TAG1,TAG2",
+    help="Comma-separated tags (optional).",
+)
+@click.option("--due-date", default=None, metavar="YYYY-MM-DD", help="Due date (optional).")
+@click.pass_context
+def cmd_add(
+    ctx: click.Context,
+    title: str,
+    content: str,
+    lane: str,
+    tags: str,
+    due_date: Optional[str],
+) -> None:
+    """Create a new task."""
+    base = ctx.obj["api_url"]
+    payload: dict = {
+        "title": title,
+        "content": content,
+        "lane": lane,
+        "tags": [t.strip() for t in tags.split(",") if t.strip()],
+    }
+    if due_date:
+        payload["due_date"] = due_date
+
+    result = api_call("POST", f"{base}/tasks", json=payload)
+    console.print(f"[green]Created task '[bold]{result['title']}[/bold]' in lane '{result['lane']}'[/green]")
+
+
+@cli.command("update")
+@click.argument("title")
+@click.option("--content", default=None, help="New body text.")
+@click.option("--tags", default=None, metavar="TAG1,TAG2", help="Replacement tag list (comma-separated).")
+@click.option("--new-title", default=None, help="Rename the task.")
+@click.option("--due-date", default=None, metavar="YYYY-MM-DD", help="New due date, or empty string to clear.")
+@click.pass_context
+def cmd_update(
+    ctx: click.Context,
+    title: str,
+    content: Optional[str],
+    tags: Optional[str],
+    new_title: Optional[str],
+    due_date: Optional[str],
+) -> None:
+    """Update task fields. Only provided fields are changed."""
+    base = ctx.obj["api_url"]
+    payload: dict = {}
+    if content is not None:
+        payload["content"] = content
+    if tags is not None:
+        payload["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
+    if new_title is not None:
+        payload["new_title"] = new_title
+    if due_date is not None:
+        payload["due_date"] = due_date or None
+
+    if not payload:
+        console.print("[yellow]Nothing to update — provide at least one option.[/yellow]")
+        return
+
+    result = api_call("PUT", task_url(base, title), json=payload)
+    console.print(f"[green]Updated task '[bold]{result['title']}[/bold]'[/green]")
+
+
+@cli.command("delete")
+@click.argument("title")
+@click.confirmation_option(prompt="Move this task to Trash?")
+@click.pass_context
+def cmd_delete(ctx: click.Context, title: str) -> None:
+    """Move a task to Trash (soft delete)."""
+    base = ctx.obj["api_url"]
+    api_call("DELETE", task_url(base, title))
+    console.print(f"[yellow]Moved '[bold]{title}[/bold]' to Trash.[/yellow]")
+
+
+@cli.command("move")
+@click.argument("title")
+@click.argument("new_lane")
+@click.pass_context
+def cmd_move(ctx: click.Context, title: str, new_lane: str) -> None:
+    """Move a task to a different lane."""
+    base = ctx.obj["api_url"]
+    result = api_call("POST", f"{task_url(base, title)}/move", json={"lane": new_lane})
+    console.print(f"[green]{result.get('message', 'Done')}[/green]")
+
+
+@cli.command("split")
+@click.pass_context
+def cmd_split(ctx: click.Context) -> None:
+    """Split all tasks containing the [[split]] marker into numbered subtasks."""
+    base = ctx.obj["api_url"]
+    result = api_call("POST", f"{base}/operations/split")
+    msg = result.get("message", "Done")
+    if "tasks_split" in result:
+        console.print(f"[green]{msg}[/green]")
+        console.print(f"Tasks split: [bold]{result['tasks_split']}[/bold]")
+        for t in result.get("original_tasks", []):
+            console.print(f"  [dim]•[/dim] {t}")
+        console.print(f"Total tasks after: [bold]{result['total_tasks_after']}[/bold]")
+    else:
+        console.print(f"[yellow]{msg}[/yellow]")
+
+
+# ---------------------------------------------------------------------------
+# Lanes sub-group
+# ---------------------------------------------------------------------------
+
+@cli.group("lanes")
+def lanes_group() -> None:
+    """Manage lanes."""
+
+
+@lanes_group.command("list")
+@click.pass_context
+def lanes_list(ctx: click.Context) -> None:
+    """List all lanes with task counts."""
+    base = ctx.obj["api_url"]
+    data = api_call("GET", f"{base}/lanes")
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Lane", style="magenta")
+    table.add_column("Tasks", justify="right")
+
+    for lane in data.get("lanes", []):
+        table.add_row(lane["name"], str(lane["task_count"]))
+
+    console.print(table)
+    console.print(f"[dim]{data.get('total_lanes', 0)} lane(s)[/dim]")
+
+
+@lanes_group.command("add")
+@click.argument("name")
+@click.pass_context
+def lanes_add(ctx: click.Context, name: str) -> None:
+    """Create a new lane."""
+    base = ctx.obj["api_url"]
+    result = api_call("POST", f"{base}/lanes", json={"name": name})
+    console.print(f"[green]{result.get('message', 'Done')}[/green]")
+
+
+# ---------------------------------------------------------------------------
+# Statistics
+# ---------------------------------------------------------------------------
+
+@cli.command("stats")
+@click.pass_context
+def cmd_stats(ctx: click.Context) -> None:
+    """Show task statistics: lanes, tags, and due dates."""
+    base = ctx.obj["api_url"]
+    stats = api_call("GET", f"{base}/operations/statistics")
+
+    # Lanes table
+    lane_table = Table(title="Tasks per Lane", header_style="bold cyan")
+    lane_table.add_column("Lane", style="magenta")
+    lane_table.add_column("Tasks", justify="right")
+    for lane, count in sorted(stats.get("tasks_per_lane", {}).items()):
+        lane_table.add_row(lane, str(count))
+    console.print(lane_table)
+
+    # Tags table
+    tag_table = Table(title="Tag Counts", header_style="bold cyan")
+    tag_table.add_column("Tag", style="green")
+    tag_table.add_column("Count", justify="right")
+    for tag, count in sorted(stats.get("tag_counts", {}).items(), key=lambda x: -x[1]):
+        tag_table.add_row(tag, str(count))
+    if tag_table.row_count:
+        console.print(tag_table)
+    else:
+        console.print("[dim]No tags found.[/dim]")
+
+    # Due dates table
+    due_table = Table(title="Due Date Counts", header_style="bold cyan")
+    due_table.add_column("Due Date", style="yellow")
+    due_table.add_column("Count", justify="right")
+    for date, count in sorted(stats.get("due_date_counts", {}).items(), key=lambda x: -x[1]):
+        due_table.add_row(date, str(count))
+    if due_table.row_count:
+        console.print(due_table)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    cli()

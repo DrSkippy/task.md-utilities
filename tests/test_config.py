@@ -1,5 +1,5 @@
 import unittest
-import json
+import yaml
 import tempfile
 import shutil
 from pathlib import Path
@@ -12,7 +12,7 @@ class TestConfig(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.test_dir = Path(tempfile.mkdtemp())
-        self.config_file = self.test_dir / "test_config.json"
+        self.config_file = self.test_dir / "test_config.yaml"
 
     def tearDown(self):
         """Clean up test fixtures."""
@@ -36,7 +36,7 @@ class TestConfig(unittest.TestCase):
             }
         }
         with open(self.config_file, 'w') as f:
-            json.dump(config_data, f)
+            yaml.dump(config_data, f)
 
         config = Config(self.config_file)
         self.assertEqual(config.base_dir, self.test_dir)
@@ -49,7 +49,7 @@ class TestConfig(unittest.TestCase):
             'base_dir': str(self.test_dir)
         }
         with open(self.config_file, 'w') as f:
-            json.dump(config_data, f)
+            yaml.dump(config_data, f)
 
         config = Config()
         config.load_config(self.config_file)
@@ -65,7 +65,7 @@ class TestConfig(unittest.TestCase):
             }
         }
         with open(self.config_file, 'w') as f:
-            json.dump(config_data, f)
+            yaml.dump(config_data, f)
 
         config = Config()
         config.load_config(self.config_file)
@@ -81,7 +81,7 @@ class TestConfig(unittest.TestCase):
             }
         }
         with open(self.config_file, 'w') as f:
-            json.dump(config_data, f)
+            yaml.dump(config_data, f)
 
         config = Config()
         config.load_config(self.config_file)
@@ -91,7 +91,7 @@ class TestConfig(unittest.TestCase):
     def test_load_config_file_not_found(self):
         """Test loading non-existent config file raises error."""
         config = Config()
-        non_existent_file = self.test_dir / "non_existent.json"
+        non_existent_file = self.test_dir / "non_existent.yaml"
 
         with self.assertRaises(FileNotFoundError):
             config.load_config(non_existent_file)
@@ -102,12 +102,11 @@ class TestConfig(unittest.TestCase):
             'base_dir': '~/test_tasks'
         }
         with open(self.config_file, 'w') as f:
-            json.dump(config_data, f)
+            yaml.dump(config_data, f)
 
         config = Config()
         config.load_config(self.config_file)
 
-        # Should be expanded and resolved
         self.assertNotIn('~', str(config.base_dir))
         self.assertTrue(config.base_dir.is_absolute())
 
@@ -144,12 +143,10 @@ class TestConfig(unittest.TestCase):
 
         config.save_config(self.config_file)
 
-        # Verify file was created
         self.assertTrue(self.config_file.exists())
 
-        # Verify content
         with open(self.config_file, 'r') as f:
-            saved_data = json.load(f)
+            saved_data = yaml.safe_load(f)
 
         self.assertEqual(saved_data['base_dir'], str(self.test_dir))
         self.assertEqual(saved_data['openai']['api_key'], 'test-key-save')
@@ -177,7 +174,7 @@ class TestConfig(unittest.TestCase):
             'openai': {}
         }
         with open(self.config_file, 'w') as f:
-            json.dump(config_data, f)
+            yaml.dump(config_data, f)
 
         config = Config()
         config.load_config(self.config_file)
@@ -191,7 +188,7 @@ class TestConfig(unittest.TestCase):
             'base_dir': str(self.test_dir)
         }
         with open(self.config_file, 'w') as f:
-            json.dump(config_data, f)
+            yaml.dump(config_data, f)
 
         config = Config()
         config.load_config(self.config_file)

@@ -1,6 +1,7 @@
 import csv
 import shutil
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict
 
@@ -121,14 +122,14 @@ class TaskManager:
                 tags = [tag.strip() for tag in row['tag_list'].split(',')]
                 content = row['task']
                 lane = row['lane']
-                due_date = row['due_date'] if 'due_date' in row else None
-                if due_date:
+                due_date_raw = row.get('due_date')
+                due_date = None
+                if due_date_raw:
                     try:
-                        # Validate date format
-                        due_date = datetime.strptime(due_str, '%Y-%m-%d')
-                        logger.info(f"Found due date: {due_str}")
+                        due_date = datetime.strptime(due_date_raw, '%Y-%m-%d')
+                        logger.info(f"Found due date: {due_date_raw}")
                     except ValueError:
-                        logger.warning(f"Invalid due date format found: {due_str}")
+                        logger.warning(f"Invalid due date format found: {due_date_raw}")
                 task = Task(
                     title=title,
                     content=content,
@@ -142,9 +143,21 @@ class TaskManager:
                     task.add_tag_lines_to_task_content()
                 task.to_file(self.base_dir)
 
-    def create_tasks_from_dict(self, task_dict_list):
+    def create_tasks_from_dict(self, task_dict_list: list) -> None:
+        """
+        Creates tasks from a list of task dictionaries.
+
+        Each dictionary should have keys matching the Task.from_dict() expectations:
+        title, content, lane, and optionally tags and due_date.
+
+        :param task_dict_list: List of task data dictionaries.
+        :type task_dict_list: list
+        :return: None
+        """
         for task_dict in task_dict_list:
-            self.ta
+            task = Task.from_dict(task_dict)
+            if task:
+                task.to_file(self.base_dir)
 
     def empty_trash(self) -> None:
         """
@@ -159,9 +172,10 @@ class TaskManager:
 
         :return: None
         """
-        for file in self.trash_dir.glob("*.md"):
+        files = list(self.trash_dir.glob("*.md"))
+        for file in files:
             file.unlink()
-        logger.info(f"Removed {len(list(self.trash_dir.glob('*.md')))} files from trash")
+        logger.info(f"Removed {len(files)} files from trash")
 
     def change_lane(self, task_title: str, new_lane: str) -> None:
         """

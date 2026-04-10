@@ -6,16 +6,41 @@ authors = [
     {name = "Scott Hendrickson",email = "scott@drskippy.net"}
 ]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11,<4.0"
 dependencies = [
-    "openai (>=1.82.0,<2.0.0)",
-    "pytest (>=9.0.2,<10.0.0)"
+    "click (>=8.1.0)",
+    "rich (>=13.0.0)",
+    "requests (>=2.31.0)",
+    "flask (>=3.0.0)",
+    "gunicorn (>=21.2.0)",
+    "pydantic (>=2.7.0)",
+    "pyyaml (>=6.0.0)",
+    "fastmcp (>=2.0.0)",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest (>=9.0.2,<10.0.0)",
+    "pytest-cov (>=4.0.0)",
+    "black (>=24.0.0)",
+    "mypy (>=1.8.0)",
+    "types-requests (>=2.31.0)",
+    "types-pyyaml (>=6.0.0)",
 ]
 
 [tool.poetry]
-packages = [{include = "task"}]
+packages = [
+    {include = "task_lib"},
+    {include = "task_api"},
+]
 
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.0.3,<10.0.0)",
+    "pytest-cov (>=7.1.0,<8.0.0)"
+]

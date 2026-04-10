@@ -1,4 +1,24 @@
 services:
+  task-api:
+    image: localhost:5000/task-api:latest
+    container_name: task-api
+    ports:
+      - "3101:2999"
+    volumes:
+      - /mnt/raid1/lib/tasks.md/tasks:/data/tasks
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TASK_CONFIG_PATH=/app/config/config.yaml
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2999/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - task-network
+
   task-manager-mcp:
     image: localhost:5000/task-manager-mcp:latest
     container_name: task-manager-mcp
@@ -19,8 +39,8 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - task-manager-network
+      - task-network
 
 networks:
-  task-manager-network:
+  task-network:
     driver: bridge

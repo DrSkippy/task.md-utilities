@@ -1,424 +1,424 @@
 #!/usr/bin/env python3
-__version__ = "0.1.0"
+"""
+FastMCP-based MCP server for the HENDRICKSON KANBAN task management system.
+
+The HENDRICKSON KANBAN system stores tasks as markdown files organized into lane
+directories. Each lane is a subdirectory of the task data root; each task is a .md
+file named after the task title. Tasks support tags ([tag:name]) and due dates
+([due:YYYY-MM-DD]) embedded in the file content.
+
+This server exposes the task management library over the Model Context Protocol so
+AI assistants can read and manipulate tasks programmatically.
+
+Configuration:
+    TASK_CONFIG_PATH  Path to a YAML config file containing ``base_dir``.
+                      Defaults to /app/config/config.yaml.
+    HOST              Bind host (default: 0.0.0.0).
+    PORT              Bind port (default: 3003).
+"""
+
+__version__ = "0.2.0"
 __author__ = "Scott Hendrickson"
 __email__ = "scott@drskippy.net"
-
-"""
-FastMCP-based MCP server for task management.
-Provides tools for managing tasks using the task_lib library.
-"""
 
 import json
 import logging
 import os
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
+
+import yaml
+from mcp.server.fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 
 # Add parent directory to path to import task_lib
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mcp.server.fastmcp import FastMCP
-from starlette.responses import PlainTextResponse
-from starlette.requests import Request
-
 from task_lib.config import Config
-from task_lib.task_manager import TaskManager
 from task_lib.task import Task
+from task_lib.task_manager import TaskManager
 
-# Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("mcp-task-service")
 
-# Create FastMCP server with streamable HTTP support
 port = int(os.getenv("PORT", "3003"))
 host = os.getenv("HOST", "0.0.0.0")
 
-# Initialize FastMCP server
-mcp = FastMCP("task-manager",
-              host=host,
-              port=port
-              )
+mcp = FastMCP("task-manager", host=host, port=port)
 
-# Global task manager instance
-task_manager: Optional[TaskManager] = None
+_task_manager: Optional[TaskManager] = None
 
 
 def get_task_manager() -> TaskManager:
-    """Get or initialize the task manager instance."""
-    global task_manager
-    if task_manager is None:
-        # Try to load config from environment or use default
-        config_path = Path.cwd() / "config.json"
+    """Get or initialize the singleton TaskManager instance."""
+    global _task_manager
+    if _task_manager is None:
+        config = Config()
+        config_path = Path(os.getenv("TASK_CONFIG_PATH", "/app/config/config.yaml"))
         if config_path.exists():
-            config = Config(config_path)
+            data = yaml.safe_load(config_path.read_text())
+            config.base_dir = Path(data["base_dir"])
+            logger.info(f"Loaded config from {config_path}: base_dir={config.base_dir}")
         else:
-            config = Config()
-            # Set default base directory to /data for Docker
             config.base_dir = Path("/data/tasks")
-            config.base_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"No config file found at {config_path}, using default base_dir={config.base_dir}")
+        config.base_dir.mkdir(parents=True, exist_ok=True)
+        _task_manager = TaskManager(config)
+    return _task_manager
 
-        task_manager = TaskManager(config)
-    return task_manager
+
+def _task_to_dict(task: Task) -> dict:
+    return {
+        "title": task.title,
+        "lane": task.lane,
+        "content": task.content,
+        "tags": task.tags or [],
+        "due_date": task.due_date.strftime("%Y-%m-%d") if task.due_date else None,
+        "path": str(task.path),
+    }
+
+
+def _find_task(tm: TaskManager, title: str) -> Optional[Task]:
+    """Search all lanes for a task with the given title (case-insensitive)."""
+    title_lower = title.lower()
+    for tasks in tm.get_all_tasks().values():
+        for task in tasks:
+            if task.title.lower() == title_lower:
+                return task
+    return None
 
 
 @mcp.tool()
-def add_task_from_json(task_json: str) -> str:
+def add_task(
+    title: str,
+    content: str,
+    lane: str,
+    tags: Optional[List[str]] = None,
+    due_date: Optional[str] = None,
+) -> str:
     """
-    Add a new task to the HENDRICKSON KANBAN system.
-
-    The HENDRICKSON KANBAN system is a file-based task management system that stores tasks
-    as markdown files organized into lanes (workflow stages). Each task is represented by
-    a .md file within a lane directory. Tasks can be enriched with tags for categorization
-    and due dates for time management. The data store uses a simple directory structure where
-    each lane is a subdirectory containing task files, making it easy to version control and
-    sync across systems.
+    Add a new task to the kanban board.
 
     Args:
-        task_json: JSON string containing task data with fields:
-                  - title (required): Task title
-                  - content (required): Task content
-                  - lane (required): Lane name
-                  - tags (optional): List of tags
-                  - due_date (optional): Due date in YYYY-MM-DD format
+        title: Task title (becomes the filename, without .md extension).
+        content: Task body text (plain text or markdown).
+        lane: Target lane name. The lane directory will be created if it does not exist.
+        tags: Optional list of tag strings for categorisation.
+        due_date: Optional due date in YYYY-MM-DD format.
 
     Returns:
-        Success message or error details
+        Confirmation message or error description.
     """
     try:
-        task_data = json.loads(task_json)
-
-        # Validate required fields
-        if not all(k in task_data for k in ['title', 'content', 'lane']):
-            return "Error: Missing required fields (title, content, lane)"
-
-        # Parse due date if provided
-        due_date = None
-        if 'due_date' in task_data and task_data['due_date']:
+        parsed_due: Optional[datetime] = None
+        if due_date:
             try:
-                due_date = datetime.strptime(task_data['due_date'], '%Y-%m-%d')
+                parsed_due = datetime.strptime(due_date, "%Y-%m-%d")
             except ValueError:
-                return f"Error: Invalid due_date format. Use YYYY-MM-DD"
+                return f"Error: Invalid due_date '{due_date}'. Use YYYY-MM-DD format."
 
-        # Create task
         tm = get_task_manager()
         task = Task(
-            title=task_data['title'],
-            content=task_data['content'],
-            lane=task_data['lane'],
-            tags=task_data.get('tags', []),
-            due_date=due_date,
-            path=tm.base_dir / task_data['lane'] / f"{task_data['title']}.md"
+            title=title,
+            content=content,
+            lane=lane,
+            tags=tags or [],
+            due_date=parsed_due,
+            path=tm.base_dir / lane / f"{title}.md",
         )
-
-        # Save task to file
         task.to_file(tm.base_dir)
-
-        return f"Successfully created task '{task_data['title']}' in lane '{task_data['lane']}'"
-
-    except json.JSONDecodeError as e:
-        return f"Error: Invalid JSON - {str(e)}"
+        return f"Successfully created task '{title}' in lane '{lane}'"
     except Exception as e:
-        return f"Error creating task: {str(e)}"
+        return f"Error creating task: {e}"
 
 
 @mcp.tool()
-def move_task_to_lane(task_title: str, new_lane: str) -> str:
+def get_task(title: str) -> str:
     """
-    Move a task from its current lane to a new lane in the HENDRICKSON KANBAN system.
-
-    The HENDRICKSON KANBAN system is a file-based task management system that stores tasks
-    as markdown files organized into lanes (workflow stages). Each task is represented by
-    a .md file within a lane directory. Tasks can be enriched with tags for categorization
-    and due dates for time management. The data store uses a simple directory structure where
-    each lane is a subdirectory containing task files, making it easy to version control and
-    sync across systems.
+    Retrieve a single task by its title, searching across all lanes.
 
     Args:
-        task_title: Title of the task to move
-        new_lane: Name of the destination lane
+        title: Exact task title (case-sensitive, no .md extension).
 
     Returns:
-        Success message or error details
+        JSON object with task details, or an error message if not found.
     """
     try:
         tm = get_task_manager()
-
-        # Find the task
-        all_tasks = tm.get_all_tasks()
-        task_found = False
-        current_lane = None
-
-        for lane, tasks in all_tasks.items():
-            for task in tasks:
-                if task.title == task_title:
-                    task_found = True
-                    current_lane = lane
-                    break
-            if task_found:
-                break
-
-        if not task_found:
-            return f"Error: Task '{task_title}' not found in any lane"
-
-        # Use the change_lane method
-        tm.change_lane(task_title, new_lane)
-
-        return f"Successfully moved task '{task_title}' from '{current_lane}' to '{new_lane}'"
-
-    except Exception as e:
-        return f"Error moving task: {str(e)}"
-
-
-@mcp.tool()
-def list_lanes() -> str:
-    """
-    List all available lanes in the HENDRICKSON KANBAN system.
-
-    The HENDRICKSON KANBAN system is a file-based task management system that stores tasks
-    as markdown files organized into lanes (workflow stages). Each task is represented by
-    a .md file within a lane directory. Tasks can be enriched with tags for categorization
-    and due dates for time management. The data store uses a simple directory structure where
-    each lane is a subdirectory containing task files, making it easy to version control and
-    sync across systems.
-
-    Returns:
-        JSON string containing list of lane names and task counts
-    """
-    try:
-        tm = get_task_manager()
-        all_tasks = tm.get_all_tasks()
-
-        lanes_info = {
-            "lanes": [
-                {
-                    "name": lane,
-                    "task_count": len(tasks)
-                }
-                for lane, tasks in all_tasks.items()
-            ],
-            "total_lanes": len(all_tasks)
-        }
-
-        return json.dumps(lanes_info, indent=2)
-
+        task = _find_task(tm, title)
+        if task is None:
+            return json.dumps({"error": f"Task '{title}' not found in any lane"})
+        return json.dumps(_task_to_dict(task), indent=2)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
 
 @mcp.tool()
-def list_tasks(lane: Optional[str] = None, tag: Optional[str] = None) -> str:
+def move_task_to_lane(task_title: str, new_lane: str) -> str:
     """
-    List tasks from the HENDRICKSON KANBAN system, optionally filtered by lane and/or tag.
-
-    The HENDRICKSON KANBAN system is a file-based task management system that stores tasks
-    as markdown files organized into lanes (workflow stages). Each task is represented by
-    a .md file within a lane directory. Tasks can be enriched with tags for categorization
-    and due dates for time management. The data store uses a simple directory structure where
-    each lane is a subdirectory containing task files, making it easy to version control and
-    sync across systems.
+    Move a task from its current lane to a different lane.
 
     Args:
-        lane: Optional lane name to filter by
-        tag: Optional tag to filter by
+        task_title: Title of the task to move.
+        new_lane: Name of the destination lane (created if it does not exist).
 
     Returns:
-        JSON string containing list of tasks with their details
+        Confirmation message or error description.
+    """
+    try:
+        tm = get_task_manager()
+        task = _find_task(tm, task_title)
+        if task is None:
+            return f"Error: Task '{task_title}' not found in any lane"
+        current_lane = task.lane
+        tm.change_lane(task_title, new_lane)
+        return f"Successfully moved task '{task_title}' from '{current_lane}' to '{new_lane}'"
+    except Exception as e:
+        return f"Error moving task: {e}"
+
+
+@mcp.tool()
+def delete_task(title: str) -> str:
+    """
+    Move a task to the Trash directory (soft delete).
+
+    Args:
+        title: Exact task title to delete.
+
+    Returns:
+        Confirmation message or error description.
+    """
+    try:
+        tm = get_task_manager()
+        task = _find_task(tm, title)
+        if task is None:
+            return f"Error: Task '{title}' not found in any lane"
+        trash_path = tm.trash_dir / task.path.name
+        shutil.move(str(task.path), str(trash_path))
+        return f"Moved task '{title}' to Trash"
+    except Exception as e:
+        return f"Error deleting task: {e}"
+
+
+@mcp.tool()
+def list_lanes() -> str:
+    """
+    List all available lanes with their task counts.
+
+    Returns:
+        JSON object with a ``lanes`` array (name, task_count) and ``total_lanes``.
+    """
+    try:
+        tm = get_task_manager()
+        all_tasks = tm.get_all_tasks()
+        return json.dumps(
+            {
+                "lanes": [
+                    {"name": lane, "task_count": len(tasks)}
+                    for lane, tasks in all_tasks.items()
+                ],
+                "total_lanes": len(all_tasks),
+            },
+            indent=2,
+        )
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool()
+def add_lane(lane_name: str) -> str:
+    """
+    Create a new lane (workflow stage directory) in the kanban board.
+
+    Args:
+        lane_name: Name for the new lane. Must be a valid directory name.
+
+    Returns:
+        Confirmation message or error description.
+    """
+    try:
+        tm = get_task_manager()
+        tm.add_lane(lane_name)
+        return f"Successfully created lane '{lane_name}'"
+    except Exception as e:
+        return f"Error creating lane: {e}"
+
+
+@mcp.tool()
+def list_tasks(lane: Optional[str] = None, tag: Optional[str] = None) -> str:
+    """
+    List tasks, optionally filtered by lane and/or tag.
+
+    Args:
+        lane: If provided, return only tasks in this lane.
+        tag: If provided, return only tasks that have this tag.
+
+    Returns:
+        JSON object with a ``tasks`` array, ``count``, and active ``filters``.
     """
     try:
         tm = get_task_manager()
         all_tasks = tm.get_all_tasks()
 
-        result_tasks = []
+        if lane:
+            lane_lower = lane.lower()
+            lanes_to_check = {k: v for k, v in all_tasks.items() if k.lower() == lane_lower}
+        else:
+            lanes_to_check = all_tasks
 
-        # Filter by lane if specified
-        lanes_to_check = {lane: all_tasks[lane]} if lane and lane in all_tasks else all_tasks
-
-        for lane_name, tasks in lanes_to_check.items():
+        result = []
+        for tasks in lanes_to_check.values():
             for task in tasks:
-                # Filter by tag if specified
-                if tag and (not task.tags or tag not in task.tags):
+                if tag and (not task.tags or tag.lower() not in [t.lower() for t in task.tags]):
                     continue
+                result.append(_task_to_dict(task))
 
-                task_info = {
-                    "title": task.title,
-                    "lane": task.lane,
-                    "content": task.content,
-                    "tags": task.tags or [],
-                    "due_date": task.due_date.strftime('%Y-%m-%d') if task.due_date else None,
-                    "path": str(task.path)
-                }
-                result_tasks.append(task_info)
-
-        return json.dumps({
-            "tasks": result_tasks,
-            "count": len(result_tasks),
-            "filters": {
-                "lane": lane,
-                "tag": tag
-            }
-        }, indent=2)
-
+        return json.dumps(
+            {"tasks": result, "count": len(result), "filters": {"lane": lane, "tag": tag}},
+            indent=2,
+        )
     except Exception as e:
         return json.dumps({"error": str(e)})
 
 
 @mcp.tool()
 def update_task(
-        task_title: str,
-        content: Optional[str] = None,
-        tags: Optional[str] = None,
-        new_title: Optional[str] = None,
-        due_date: Optional[str] = None
+    task_title: str,
+    content: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    new_title: Optional[str] = None,
+    due_date: Optional[str] = None,
 ) -> str:
     """
-    Update a task's properties in the HENDRICKSON KANBAN system.
+    Update one or more fields of an existing task.
 
-    The HENDRICKSON KANBAN system is a file-based task management system that stores tasks
-    as markdown files organized into lanes (workflow stages). Each task is represented by
-    a .md file within a lane directory. Tasks can be enriched with tags for categorization
-    and due dates for time management. The data store uses a simple directory structure where
-    each lane is a subdirectory containing task files, making it easy to version control and
-    sync across systems.
+    Only the fields you provide will be changed; omitted fields are left as-is.
+    To clear the due date, pass an empty string for ``due_date``.
 
     Args:
-        task_title: Current title of the task to update
-        content: New content (optional)
-        tags: Comma-separated list of new tags (optional)
-        new_title: New title for the task (optional)
-        due_date: New due date in YYYY-MM-DD format (optional)
+        task_title: Current title of the task to update.
+        content: New body text (optional).
+        tags: New list of tags, replacing all existing tags (optional).
+        new_title: Rename the task to this title (optional).
+        due_date: New due date in YYYY-MM-DD format, or empty string to clear (optional).
 
     Returns:
-        Success message or error details
+        Confirmation message or error description.
     """
     try:
         tm = get_task_manager()
-
-        # Find the task
-        all_tasks = tm.get_all_tasks()
-        task_to_update = None
-
-        for lane, tasks in all_tasks.items():
-            for task in tasks:
-                if task.title == task_title:
-                    task_to_update = task
-                    break
-            if task_to_update:
-                break
-
-        if not task_to_update:
+        task = _find_task(tm, task_title)
+        if task is None:
             return f"Error: Task '{task_title}' not found"
 
-        # Delete old file if title is changing
-        old_path = task_to_update.path
+        old_path = task.path
 
-        # Update fields
         if content is not None:
-            task_to_update.content = content
+            task.content = content
 
         if tags is not None:
-            task_to_update.tags = [t.strip() for t in tags.split(',') if t.strip()]
+            task.tags = tags
 
         if new_title is not None:
-            task_to_update.title = new_title
-            task_to_update.path = task_to_update.path.parent / f"{new_title}.md"
+            task.title = new_title
+            task.path = task.path.parent / f"{new_title}.md"
 
         if due_date is not None:
             if due_date:
                 try:
-                    task_to_update.due_date = datetime.strptime(due_date, '%Y-%m-%d')
+                    task.due_date = datetime.strptime(due_date, "%Y-%m-%d")
                 except ValueError:
-                    return f"Error: Invalid due_date format. Use YYYY-MM-DD"
+                    return f"Error: Invalid due_date '{due_date}'. Use YYYY-MM-DD format."
             else:
-                task_to_update.due_date = None
+                task.due_date = None
 
-        # Save updated task
-        task_to_update.to_file(tm.base_dir)
+        task.to_file(tm.base_dir)
 
-        # Remove old file if title changed
         if new_title and old_path.exists():
             old_path.unlink()
 
-        return f"Successfully updated task '{task_to_update.title}'"
-
+        return f"Successfully updated task '{task.title}'"
     except Exception as e:
-        return f"Error updating task: {str(e)}"
+        return f"Error updating task: {e}"
 
 
 @mcp.tool()
 def split_tasks() -> str:
     """
-    Split all tasks in the HENDRICKSON KANBAN system that contain the [[split]] marker.
+    Split all tasks that contain the ``[[split]]`` marker into numbered subtasks.
 
-    The HENDRICKSON KANBAN system is a file-based task management system that stores tasks
-    as markdown files organized into lanes (workflow stages). Each task is represented by
-    a .md file within a lane directory. Tasks can be enriched with tags for categorization
-    and due dates for time management. The data store uses a simple directory structure where
-    each lane is a subdirectory containing task files, making it easy to version control and
-    sync across systems.
-
-    Tasks containing [[split]] will be divided at each marker, creating numbered subtasks,
-    and the original task will be moved to trash.
+    Tasks are divided at each ``[[split]]`` occurrence; each segment becomes a new
+    task named ``{n}-{original-title}``. Original tags are preserved and a
+    ``multi-story feature`` tag is added. The original task is moved to Trash.
 
     Returns:
-        Summary of split operations performed
+        JSON summary of the split operation.
     """
     try:
         tm = get_task_manager()
-
-        # Get tasks before split
-        before_tasks = tm.get_all_tasks()
-        tasks_with_split = []
-
-        for lane, tasks in before_tasks.items():
-            for task in tasks:
-                if '[[split]]' in task.content:
-                    tasks_with_split.append(task.title)
+        before = tm.get_all_tasks()
+        tasks_with_split = [
+            task.title
+            for tasks in before.values()
+            for task in tasks
+            if "[[split]]" in task.content
+        ]
 
         if not tasks_with_split:
             return "No tasks found with [[split]] marker"
 
-        # Perform split
         tm.split_tasks()
+        after = tm.get_all_tasks()
 
-        # Get tasks after split
-        after_tasks = tm.get_all_tasks()
-
-        return json.dumps({
-            "message": "Split operation completed",
-            "tasks_split": len(tasks_with_split),
-            "original_tasks": tasks_with_split,
-            "total_tasks_after": sum(len(tasks) for tasks in after_tasks.values())
-        }, indent=2)
-
+        return json.dumps(
+            {
+                "message": "Split operation completed",
+                "tasks_split": len(tasks_with_split),
+                "original_tasks": tasks_with_split,
+                "total_tasks_after": sum(len(t) for t in after.values()),
+            },
+            indent=2,
+        )
     except Exception as e:
         return json.dumps({"error": str(e)})
 
 
 @mcp.tool()
-def get_statistics() -> str:
+def empty_trash() -> str:
     """
-    Get statistics about tasks in the HENDRICKSON KANBAN system.
-
-    The HENDRICKSON KANBAN system is a file-based task management system that stores tasks
-    as markdown files organized into lanes (workflow stages). Each task is represented by
-    a .md file within a lane directory. Tasks can be enriched with tags for categorization
-    and due dates for time management. The data store uses a simple directory structure where
-    each lane is a subdirectory containing task files, making it easy to version control and
-    sync across systems.
+    Permanently delete all files in the Trash directory.
 
     Returns:
-        JSON string containing task statistics including lane counts, tag usage, and due dates
+        Confirmation message with the number of files removed.
+    """
+    try:
+        tm = get_task_manager()
+        tm.empty_trash()
+        return "Trash emptied successfully"
+    except Exception as e:
+        return f"Error emptying trash: {e}"
+
+
+@mcp.tool()
+def get_statistics() -> str:
+    """
+    Get statistics about the kanban board.
+
+    Returns:
+        JSON object with ``num_lanes``, ``tasks_per_lane``, ``tag_counts``, and
+        ``due_date_counts``.
     """
     try:
         tm = get_task_manager()
         stats = tm.calculate_statistics()
         return json.dumps(stats, indent=2)
-
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -429,10 +429,9 @@ async def health_check(request: Request) -> PlainTextResponse:
 
 
 if __name__ == "__main__":
-    # Run the MCP server
-    logging.info("#" * 70)
-    logging.info("Starting MCP server for HENDRICKSON KANBAN task management")
-    logging.info(f"Server version={__version__}")
-    logging.info(f"Server created by {__author__}")
-    logging.info("#" * 70)
+    logger.info("#" * 70)
+    logger.info("Starting MCP server for HENDRICKSON KANBAN task management")
+    logger.info(f"Server version={__version__}")
+    logger.info(f"Server created by {__author__}")
+    logger.info("#" * 70)
     mcp.run(transport="streamable-http")

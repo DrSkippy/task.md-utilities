@@ -1,283 +1,212 @@
 # Task.md Utilities (HENDRICKSON KANBAN)
 
-A command-line utility and MCP server for managing tasks organized in lanes, where each task is represented by a markdown file.
+A REST API, MCP server, and command-line interface for managing tasks organized in lanes, where each task is a markdown file.
 
 ## About Tasks.md
 
-This project builds on and extends the [Tasks.md](https://github.com/BaldissaraMatheus/Tasks.md) project. For comprehensive information about the Tasks.md system, including:
-- Task visualization and board views
-- Core task management concepts
-- File format specifications
-- VSCode extension and other integrations
+This project builds on and extends the [Tasks.md](https://github.com/BaldissaraMatheus/Tasks.md) project. For comprehensive information about the Tasks.md system, including task visualization, board views, file format specifications, and VSCode integration, visit the [Tasks.md repository](https://github.com/BaldissaraMatheus/Tasks.md).
 
-Please visit the [Tasks.md repository](https://github.com/BaldissaraMatheus/Tasks.md).
-
-This utilities package provides additional command-line tools and an MCP server interface for programmatic task management.
+This package adds a REST API, a network-capable CLI, and an MCP server for programmatic task management.
 
 ## Overview
 
-This utility helps manage tasks that are organized in "lanes" (directories). Each task is stored as a markdown file, with the following characteristics:
-- Task title is the filename (without .md extension)
-- Task content is the file contents
-- Tasks can have tags specified using the format `[tag:tagname]`
-- Tasks can have due dates specified using the format `[due:YYYY-MM-DD]`
-- Tasks can be split into multiple tasks using the `[[split]]` marker
-- The system is accessible both via command-line and through an MCP (Model Context Protocol) server
+Tasks are stored as markdown files organized in lane directories:
+- Task title = filename (without `.md`)
+- Tags: `[tag:tagname]` — one per line at the top of the file
+- Due dates: `[due:YYYY-MM-DD]`
+- Tasks can be split into subtasks using the `[[split]]` marker
 
-## Installation
+## Architecture
 
-**Prerequisites:** Python ≥3.10 and [Poetry](https://python-poetry.org/) must be installed.
-
-1. Clone this repository
-2. Install dependencies:
-   ```bash
-   poetry install
-   ```
-3. Make the utility executable:
-   ```bash
-   chmod +x bin/tasks.py
-   ```
+```
+┌─────────────┐     HTTP      ┌──────────────────┐
+│  tasks CLI  │ ─────────────▶│  Flask REST API   │  :2999 (internal)
+│  (bin/tasks)│               │  (task_api/)      │  :3101 (host)
+└─────────────┘               └────────┬─────────┘
+                                        │
+                              ┌─────────▼─────────┐
+┌─────────────┐    MCP        │     task_lib/      │
+│ AI assistant│ ─────────────▶│  MCP Server        │  :3003
+│ (Claude etc)│               │  (mcp_task_service)│
+└─────────────┘               └────────┬─────────┘
+                                        │
+                              ┌─────────▼─────────┐
+                              │  Markdown files    │
+                              │  /data/tasks/      │
+                              └───────────────────┘
+```
 
 ## Project Structure
 
 ```
 task.md-utilities/
 ├── bin/
-│   ├── tasks.py          # Main CLI utility
-│   └── tag-utility.py    # Tag format conversion utility
+│   ├── tasks               # CLI — connects to REST API
+│   └── tag-utility.py      # One-time tag format migration utility
 ├── task_lib/
-│   ├── config.py         # Configuration management
-│   ├── task.py           # Task model and operations
-│   └── task_manager.py   # Task manager with lane operations
-├── mcp_task_service/
-│   └── server.py         # MCP server for remote task management
-├── tests/                # Test suite
-└── README.md
+│   ├── config.py           # Configuration (YAML)
+│   ├── task.py             # Task model and file I/O
+│   └── task_manager.py     # Lane and task operations
+├── task_api/               # Flask REST API service
+│   ├── app.py
+│   ├── config.py
+│   ├── models.py           # Pydantic request/response schemas
+│   ├── routes/
+│   ├── gunicorn.conf.py
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   └── README.md
+├── mcp_task_service/       # FastMCP server for AI assistants
+│   ├── server.py
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   └── README.md
+├── tests/                  # pytest suite
+├── config.yaml             # Task data location (baked into Docker images)
+└── docker-compose.yml      # Deploys both services together
 ```
 
-## Usage
+## Deployment
 
-The utility provides several commands to manage tasks:
+Both services are deployed as Docker containers. Build from the **repo root** (build context must include both `task_lib/` and the service directory).
 
-### Show Tasks
-Display all tasks in all lanes:
-```bash
-./bin/tasks.py --show-tasks
-```
-
-Example output:
-```
-Lane: In Progress
------------------
-Title: Implement login
-Tags: frontend, auth
-Due Date: 2026-02-01
-----------------------------------------
-Title: Setup database
-Tags: backend, db
-----------------------------------------
-```
-
-### Add a Lane
-Create a new lane (directory) for organizing tasks:
-```bash
-./bin/tasks.py --add-lane "lane-name"
-```
-
-### Split Tasks
-Split tasks that contain the `[[split]]` marker into multiple tasks:
-```bash
-./bin/tasks.py --split-tasks
-```
-When a task is split:
-- The content is divided at each `[[split]]` marker; each segment becomes the body of a new task
-- New tasks are named `{n}-{original-title}.md` — e.g., if the original file is `my-feature.md`, the results are `1-my-feature.md`, `2-my-feature.md`, etc.
-- The original task is moved to the "Trash" directory
-- Tags from the original task are preserved and a `multi-story feature` tag is added
-
-### Create Tasks from CSV
-Create multiple tasks from a CSV file:
-```bash
-./bin/tasks.py --csv-create-tasks path/to/file.csv
-```
-The CSV file should have these columns:
-- `title`: The task title
-- `tag_list`: Comma-separated list of tags
-- `task`: The task content
-- `lane`: The lane to create the task in
-- `due_date`: (Optional) Due date in YYYY-MM-DD format
-
-### Change Task Lane
-Move a task from its current lane to a new lane:
-```bash
-./bin/tasks.py --change-lane "task-title" "new-lane-name"
-```
-This will:
-- Search for the task in all lanes
-- Create the new lane if it doesn't exist
-- Move the task file to the new lane
-- Print a message indicating the move was successful
-
-### Empty Trash
-Remove all files from the trash directory:
-```bash
-./bin/tasks.py --empty-trash
-```
-
-### Show Statistics Summary
-Display statistics about your tasks including lane counts, tasks per lane, and tag usage:
-```bash
-./bin/tasks.py --summary
-```
-
-Example output:
-```
-==================================================
-TASK STATISTICS SUMMARY
-==================================================
-
-Total number of lanes: 3
-
-Tasks per lane:
-------------------------------
-  Backlog: 5 tasks
-  Done: 12 tasks
-  In Progress: 3 tasks
-
-Tag occurrence counts:
-------------------------------
-  frontend: 4 occurrences
-  urgent: 2 occurrences
-  backend: 1 occurrence
-
-Due Date occurrence counts:
-------------------------------
-  No Due Date: 14 occurrences
-  2026-02-15: 6 occurrences
-```
-
-### Specify Base Directory
-All commands can be run with a different base directory:
-```bash
-./bin/tasks.py --base-dir /path/to/tasks [other options]
-```
-
-If neither `--base-dir` nor a config file is provided, the CLI defaults to the **current working directory**.
-
-## Configuration
-
-The utility can be configured using a JSON configuration file. Use the `--config` option to specify the configuration file:
+### Build images
 
 ```bash
-./bin/tasks.py --config config.json [other options]
+docker build -t localhost:5000/task-api:latest -f task_api/Dockerfile .
+docker build -t localhost:5000/task-manager-mcp:latest -f mcp_task_service/Dockerfile .
+
+docker push localhost:5000/task-api:latest
+docker push localhost:5000/task-manager-mcp:latest
 ```
 
-When both `--config` and `--base-dir` are provided, `--base-dir` takes precedence over the `base_dir` value in the config file.
+### Deploy
 
-### Configuration File Format
-
-```json
-{
-  "base_dir": "/data/tasks"
-}
-```
-
-Configuration options:
-- `base_dir`: Base directory for tasks (overridden by `--base-dir` on the command line)
-- `openai.api_key` / `openai.model`: Reserved for future features; not currently used by any commands
-
-## Task File Format
-
-Each task is stored as a markdown file with the following format:
-```markdown
-[tag:frontend]
-[tag:urgent]
-[due:2026-02-15]
-
-Task content goes here...
-```
-
-Tags and due dates are optional. They use the following formats:
-- Tags: `[tag:tagname]` - One tag per line
-- Due dates: `[due:YYYY-MM-DD]` - Must follow ISO date format
-
-## Directory Structure
-
-```
-base_directory/
-├── Lane1/
-│   ├── task1.md
-│   └── task2.md
-├── Lane2/
-│   └── task3.md
-└── Trash/
-    └── old-task.md
-```
-
-## Examples
-
-1. Create a new lane and add tasks:
 ```bash
-./bin/tasks.py --add-lane "In Progress"
+docker-compose up -d
 ```
 
-2. Split a task that contains multiple items:
-```markdown
-# my-feature.md content:
-[tag:project]
-[tag:urgent]
+The root `docker-compose.yml` starts both services on a shared network:
 
-First item [[split]] Second item [[split]] Third item
+| Service | Internal port | Host port |
+|---------|--------------|-----------|
+| REST API | 2999 | 3101 |
+| MCP server | 3003 | 3003 |
+
+Both containers mount the task data directory:
+```yaml
+volumes:
+  - /mnt/raid1/lib/tasks.md/tasks:/data/tasks
 ```
-After running `--split-tasks`, this creates three new tasks in the same lane:
-- `1-my-feature.md` — content: "First item"
-- `2-my-feature.md` — content: "Second item"
-- `3-my-feature.md` — content: "Third item"
 
-Each split task preserves the original tags and adds a `multi-story feature` tag.
+### Configuration
 
-3. Create tasks from a CSV file:
-```csv
-title,tag_list,task,lane,due_date
-"Implement login","frontend, auth","Create login form with validation","In Progress","2026-02-01"
-"Setup database","backend, db","Configure PostgreSQL connection","Backlog","2026-02-15"
+`config.yaml` (committed to the repo) sets the task data location inside the container. It is copied into the image at build time — no volume mount needed:
+
+```yaml
+base_dir: /data/tasks
+```
+
+To change the data path, edit `config.yaml` and rebuild the images.
+
+### Running services individually
+
+Each service has its own `docker-compose.yml` for standalone use:
+
+```bash
+cd task_api && docker-compose up -d       # REST API only
+cd mcp_task_service && docker-compose up -d  # MCP only
+```
+
+## CLI (`bin/tasks`)
+
+The `tasks` CLI connects to the REST API and can run from any machine.
+
+### Installation
+
+```bash
+poetry install
+chmod +x bin/tasks
+```
+
+### API URL configuration
+
+Resolution order (first match wins):
+
+1. `--api-url URL` flag
+2. `TASKS_API_URL` environment variable
+3. `~/.config/tasks/config.yaml` → `api_url` key
+4. Default: `http://localhost:3101`
+
+Create `~/.config/tasks/config.yaml` to set a permanent remote URL:
+```yaml
+api_url: http://your-server:3101
+```
+
+### Commands
+
+```
+tasks [--api-url URL] COMMAND
+
+Commands:
+  show    List tasks (--lane, --tag, --string filters)
+  get     Show a single task in full
+  add     Create a new task
+  update  Update task fields
+  delete  Move a task to Trash
+  move    Change a task's lane
+  split   Split tasks containing [[split]] marker
+  lanes   Manage lanes
+    list  List lanes with task counts
+    add   Create a new lane
+  stats   Show statistics summary
+```
+
+### Examples
+
+```bash
+# List all tasks
+tasks show
+
+# Filter by lane, tag, or title substring (all case-insensitive)
+tasks show --lane "In Progress"
+tasks show --tag urgent
+tasks show --string "login"
+
+# Show full task detail
+tasks get "Implement login"
+
+# Create a task (prompts for missing fields)
+tasks add --title "Fix bug" --content "Reproduce and fix" --lane Backlog --tags "bug,urgent"
+
+# Update fields (only provided fields change)
+tasks update "Fix bug" --tags "bug,urgent,p1" --due-date 2026-06-01
+
+# Move between lanes
+tasks move "Fix bug" "In Progress"
+
+# Delete (moves to Trash, prompts for confirmation)
+tasks delete "Fix bug"
+
+# Lane management
+tasks lanes list
+tasks lanes add "Sprint 3"
+
+# Split a task (divides on [[split]] marker)
+tasks split
+
+# Statistics
+tasks stats
 ```
 
 ## MCP Server
 
-The HENDRICKSON KANBAN system can be accessed through an MCP (Model Context Protocol) server, allowing AI assistants and other tools to interact with your tasks programmatically.
+The MCP server exposes kanban operations to AI assistants (Claude, Cursor, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io/).
 
-### Starting the MCP Server
+### Connecting a client
 
-#### Docker Compose (Recommended)
+Add to your Claude Desktop / Claude Code config (`~/.claude/claude_desktop_config.json` or `.mcp.json`):
 
-```bash
-cd mcp_task_service
-docker-compose up -d
-```
-
-See [`mcp_task_service/README.md`](mcp_task_service/README.md) for full Docker deployment instructions.
-
-#### Running Locally
-
-```bash
-python mcp_task_service/server.py
-```
-
-The server will start on `http://0.0.0.0:3003` by default. You can customize the host and port using environment variables:
-```bash
-HOST=localhost PORT=8080 python mcp_task_service/server.py
-```
-
-### MCP Server Configuration
-
-The MCP server looks for a `config.json` file in the current working directory. If not found, it defaults to using `/data/tasks` as the base directory.
-
-### Connecting an MCP Client
-
-To connect Claude Desktop, Claude Code, or Cursor, add the server to your MCP client configuration. The server uses the streamable-HTTP transport at `http://localhost:3003/mcp`.
-
-**Claude Desktop / Claude Code** (`claude_desktop_config.json` or `.mcp.json`):
 ```json
 {
   "mcpServers": {
@@ -288,112 +217,101 @@ To connect Claude Desktop, Claude Code, or Cursor, add the server to your MCP cl
 }
 ```
 
-### Available MCP Tools
+### Available tools
 
-The MCP server exposes the following tools:
+| Tool | Description |
+|------|-------------|
+| `add_task` | Create a task (title, content, lane, tags, due_date) |
+| `get_task` | Retrieve a task by title |
+| `update_task` | Update task fields |
+| `delete_task` | Move a task to Trash |
+| `move_task_to_lane` | Move a task to a different lane |
+| `list_tasks` | List tasks (lane and tag filters, case-insensitive) |
+| `list_lanes` | List lanes with task counts |
+| `add_lane` | Create a new lane |
+| `split_tasks` | Split tasks with `[[split]]` marker |
+| `empty_trash` | Permanently delete Trash contents |
+| `get_statistics` | Lane, tag, and due-date statistics |
 
-#### 1. add_task_from_json
-Add a new task to the system. The entire task definition must be passed as a **JSON string** in the `task_json` parameter:
-```json
-{
-  "task_json": "{\"title\": \"Implement feature X\", \"content\": \"Detailed description\", \"lane\": \"In Progress\", \"tags\": [\"frontend\", \"urgent\"], \"due_date\": \"2026-02-15\"}"
-}
+Title and tag matching is **case-insensitive** across all tools.
+
+See [`mcp_task_service/README.md`](mcp_task_service/README.md) for full details.
+
+## REST API
+
+The REST API is documented in [`task_api/README.md`](task_api/README.md).
+
+Quick reference:
+
+```bash
+# Health check
+curl http://localhost:3101/health
+
+# List tasks
+curl "http://localhost:3101/tasks"
+curl "http://localhost:3101/tasks?lane=Backlog&tag=urgent"
+curl "http://localhost:3101/tasks?search=login"
+
+# Create a task
+curl -X POST http://localhost:3101/tasks \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"My Task","content":"Details","lane":"Backlog","tags":["urgent"]}'
+
+# Move a task
+curl -X POST "http://localhost:3101/tasks/My%20Task/move" \
+  -H 'Content-Type: application/json' \
+  -d '{"lane":"In Progress"}'
+
+# Statistics
+curl http://localhost:3101/operations/statistics
 ```
 
-The JSON string must include:
-- `title` (required): Task title
-- `content` (required): Task content
-- `lane` (required): Lane name
-- `tags` (optional): Array of tag strings
-- `due_date` (optional): Due date in YYYY-MM-DD format
+## Task File Format
 
-#### 2. move_task_to_lane
-Move a task from its current lane to a new lane.
-- **Parameters**: `task_title` (string), `new_lane` (string)
+```markdown
+[tag:frontend]
+[tag:urgent]
+[due:2026-06-01]
 
-#### 3. list_lanes
-List all available lanes and their task counts.
-
-Example response:
-```json
-{
-  "lanes": [
-    {"name": "Backlog", "task_count": 5},
-    {"name": "In Progress", "task_count": 3},
-    {"name": "Done", "task_count": 12}
-  ],
-  "total_lanes": 3
-}
+Task body text goes here.
 ```
 
-#### 4. list_tasks
-List tasks with optional filtering.
-- **Parameters**: `lane` (optional), `tag` (optional)
+## Data Directory Structure
 
-Example response:
-```json
-{
-  "tasks": [
-    {
-      "title": "Implement login",
-      "lane": "In Progress",
-      "content": "Create login form with validation",
-      "tags": ["frontend", "auth"],
-      "due_date": "2026-02-01",
-      "path": "/data/tasks/In Progress/Implement login.md"
-    }
-  ],
-  "count": 1,
-  "filters": {"lane": "In Progress", "tag": null}
-}
+```
+/data/tasks/
+├── Backlog/
+│   └── Implement login.md
+├── In Progress/
+│   └── Fix auth bug.md
+├── Done/
+│   └── Setup CI.md
+└── Trash/
+    └── old-task.md
 ```
 
-#### 5. update_task
-Update a task's properties.
-- **Parameters**:
-  - `task_title` (required): Current title of the task
-  - `content` (optional): New content
-  - `tags` (optional): Comma-separated list of new tags
-  - `new_title` (optional): New title for the task
-  - `due_date` (optional): New due date in YYYY-MM-DD format
+## Development
 
-#### 6. split_tasks
-Split all tasks containing the `[[split]]` marker into multiple subtasks.
-- **Returns**: Summary of split operations performed
+### Run tests
 
-#### 7. get_statistics
-Get comprehensive statistics about tasks.
-
-Example response:
-```json
-{
-  "num_lanes": 3,
-  "tasks_per_lane": {"Backlog": 5, "In Progress": 3, "Done": 12},
-  "tag_counts": {"frontend": 4, "urgent": 2, "backend": 1},
-  "due_date_counts": {"2026-02-15": 6, "No Due Date": 14}
-}
+```bash
+poetry run pytest --cov=task_lib --cov=task_api --cov-report=term-missing tests/
 ```
 
-### Health Check
+### Run REST API locally
 
-The MCP server provides a health check endpoint at `/health` for monitoring purposes.
+```bash
+TASK_CONFIG_PATH=config.yaml poetry run gunicorn --config task_api/gunicorn.conf.py "task_api.app:create_app()"
+```
+
+### Run MCP server locally
+
+```bash
+TASK_CONFIG_PATH=config.yaml poetry run python mcp_task_service/server.py
+```
 
 ## Utilities
 
-### Tag Format Conversion Utility
+### Tag Format Migration
 
-The `bin/tag-utility.py` script helps convert tasks from the old tag format (`tags: tag1, tag2, tag3`) to the new format (`[tag:tagname]`).
-
-**Features:**
-- Searches for all `.md` files in a directory tree
-- Backs up original files with `.bak` extension
-- Converts old comma-separated tag format to new bracket format
-- Supports dry-run mode to preview changes
-
-**Usage:**
-1. Edit the script to set your task directory path
-2. Set `dryrun = True` to preview changes; output is printed to stdout. Note: the script also opens a hardcoded output file at `/home/scott/dryrun_output.md` — edit this path before running if needed
-3. Set `dryrun = False` to perform the actual conversion (writes output files in-place)
-4. Run the script: `python bin/tag-utility.py`
-
-**Note:** This utility is primarily for migrating existing task files to the new format.
+`bin/tag-utility.py` converts old-format tags (`tags: tag1, tag2`) to the current format (`[tag:tagname]`). Edit the hardcoded directory path in the script before running. Supports dry-run mode.
