@@ -1329,6 +1329,27 @@ files = [
 ]
 
 [[package]]
+name = "linkify-it-py"
+version = "2.1.0"
+description = "Links recognition library with FULL unicode support."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "linkify_it_py-2.1.0-py3-none-any.whl", hash = "sha256:0d252c1594ecba2ecedc444053db5d3a9b7ec1b0dd929c8f1d74dce89f86c05e"},
+    {file = "linkify_it_py-2.1.0.tar.gz", hash = "sha256:43360231720999c10e9328dc3691160e27a718e280673d444c38d7d3aaa3b98b"},
+]
+
+[package.dependencies]
+uc-micro-py = "*"
+
+[package.extras]
+benchmark = ["pytest", "pytest-benchmark"]
+dev = ["black", "flake8", "isort", "pre-commit", "pyproject-flake8"]
+doc = ["myst-parser", "sphinx", "sphinx_book_theme"]
+test = ["coverage", "pytest", "pytest-cov"]
+
+[[package]]
 name = "markdown-it-py"
 version = "4.0.0"
 description = "Python port of markdown-it. Markdown parsing, done right!"
@@ -1341,6 +1362,7 @@ files = [
 ]
 
 [package.dependencies]
+linkify-it-py = {version = ">=1,<3", optional = true, markers = "extra == \"linkify\""}
 mdurl = ">=0.1,<1.0"
 
 [package.extras]
@@ -1483,6 +1505,26 @@ uvicorn = {version = ">=0.31.1", markers = "sys_platform != \"emscripten\""}
 cli = ["python-dotenv (>=1.0.0)", "typer (>=0.16.0)"]
 rich = ["rich (>=13.9.4)"]
 ws = ["websockets (>=15.0.1)"]
+
+[[package]]
+name = "mdit-py-plugins"
+version = "0.5.0"
+description = "Collection of plugins for markdown-it-py"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "mdit_py_plugins-0.5.0-py3-none-any.whl", hash = "sha256:07a08422fc1936a5d26d146759e9155ea466e842f5ab2f7d2266dd084c8dab1f"},
+    {file = "mdit_py_plugins-0.5.0.tar.gz", hash = "sha256:f4918cb50119f50446560513a8e311d574ff6aaed72606ddae6d35716fe809c6"},
+]
+
+[package.dependencies]
+markdown-it-py = ">=2.0.0,<5.0.0"
+
+[package.extras]
+code-style = ["pre-commit"]
+rtd = ["myst-parser", "sphinx-book-theme"]
+testing = ["coverage", "pytest", "pytest-cov", "pytest-regressions"]
 
 [[package]]
 name = "mdurl"
@@ -2003,6 +2045,26 @@ pygments = ">=2.7.2"
 dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "requests", "setuptools", "xmlschema"]
 
 [[package]]
+name = "pytest-asyncio"
+version = "1.3.0"
+description = "Pytest support for asyncio"
+optional = false
+python-versions = ">=3.10"
+groups = ["dev"]
+files = [
+    {file = "pytest_asyncio-1.3.0-py3-none-any.whl", hash = "sha256:611e26147c7f77640e6d0a92a38ed17c3e9848063698d5c93d5aa7aa11cebff5"},
+    {file = "pytest_asyncio-1.3.0.tar.gz", hash = "sha256:d7f52f36d231b80ee124cd216ffb19369aa168fc10095013c6b014a34d3ee9e5"},
+]
+
+[package.dependencies]
+pytest = ">=8.2,<10"
+typing-extensions = {version = ">=4.12", markers = "python_version < \"3.13\""}
+
+[package.extras]
+docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1)"]
+testing = ["coverage (>=6.2)", "hypothesis (>=5.7.1)"]
+
+[[package]]
 name = "pytest-cov"
 version = "7.1.0"
 description = "Pytest plugin for measuring coverage."
@@ -2494,6 +2556,29 @@ typing-extensions = {version = ">=4.10.0", markers = "python_version < \"3.13\""
 full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
 
 [[package]]
+name = "textual"
+version = "8.2.3"
+description = "Modern Text User Interface framework"
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+files = [
+    {file = "textual-8.2.3-py3-none-any.whl", hash = "sha256:5008ac581bebf1f6fa0520404261844a231e5715fdbddd10ca73916a3af48ca2"},
+    {file = "textual-8.2.3.tar.gz", hash = "sha256:beea7b86b03b03558a2224f0cc35252e60ef8b0c4353b117b2f40972902d976a"},
+]
+
+[package.dependencies]
+markdown-it-py = {version = ">=2.1.0", extras = ["linkify"]}
+mdit-py-plugins = "*"
+platformdirs = ">=3.6.0,<5"
+pygments = ">=2.19.2,<3.0.0"
+rich = ">=14.2.0"
+typing-extensions = ">=4.4.0,<5.0.0"
+
+[package.extras]
+syntax = ["tree-sitter (>=0.25.0) ; python_version >= \"3.10\"", "tree-sitter-bash (>=0.23.0) ; python_version >= \"3.10\"", "tree-sitter-css (>=0.23.0) ; python_version >= \"3.10\"", "tree-sitter-go (>=0.23.0) ; python_version >= \"3.10\"", "tree-sitter-html (>=0.23.0) ; python_version >= \"3.10\"", "tree-sitter-java (>=0.23.0) ; python_version >= \"3.10\"", "tree-sitter-javascript (>=0.23.0) ; python_version >= \"3.10\"", "tree-sitter-json (>=0.24.0) ; python_version >= \"3.10\"", "tree-sitter-markdown (>=0.3.0) ; python_version >= \"3.10\"", "tree-sitter-python (>=0.23.0) ; python_version >= \"3.10\"", "tree-sitter-regex (>=0.24.0) ; python_version >= \"3.10\"", "tree-sitter-rust (>=0.23.0) ; python_version >= \"3.10\"", "tree-sitter-sql (>=0.3.11) ; python_version >= \"3.10\"", "tree-sitter-toml (>=0.6.0) ; python_version >= \"3.10\"", "tree-sitter-xml (>=0.7.0) ; python_version >= \"3.10\"", "tree-sitter-yaml (>=0.6.0) ; python_version >= \"3.10\""]
+
+[[package]]
 name = "types-pyyaml"
 version = "6.0.12.20260408"
 description = "Typing stubs for PyYAML"
@@ -2528,11 +2613,12 @@ version = "4.15.0"
 description = "Backported and Experimental Type Hints for Python 3.9+"
 optional = false
 python-versions = ">=3.9"
-groups = ["main"]
+groups = ["main", "dev"]
 files = [
     {file = "typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548"},
     {file = "typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466"},
 ]
+markers = {dev = "python_version < \"3.13\""}
 
 [[package]]
 name = "typing-inspection"
@@ -2548,6 +2634,21 @@ files = [
 
 [package.dependencies]
 typing-extensions = ">=4.12.0"
+
+[[package]]
+name = "uc-micro-py"
+version = "2.0.0"
+description = "Micro subset of unicode data files for linkify-it-py projects."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "uc_micro_py-2.0.0-py3-none-any.whl", hash = "sha256:3603a3859af53e5a39bc7677713c78ea6589ff188d70f4fee165db88e22b242c"},
+    {file = "uc_micro_py-2.0.0.tar.gz", hash = "sha256:c53691e495c8db60e16ffc4861a35469b0ba0821fe409a8a7a0a71864d33a811"},
+]
+
+[package.extras]
+test = ["coverage", "pytest", "pytest-cov"]
 
 [[package]]
 name = "uncalled-for"
@@ -2835,4 +2936,4 @@ dev = ["black", "mypy", "pytest", "pytest-cov", "types-pyyaml", "types-requests"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "a8d126bfab634870cb7c5a5d0594ead268f466736e68f8eb2416ffa62c0734d6"
+content-hash = "d26e0937fcd1b64f743f0b49f1392621c35e4df05504a65e79dc0516e3f147e7"

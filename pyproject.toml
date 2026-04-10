@@ -16,6 +16,7 @@ dependencies = [
     "pydantic (>=2.7.0)",
     "pyyaml (>=6.0.0)",
     "fastmcp (>=2.0.0)",
+    "textual (>=8.2.3,<9.0.0)",
 ]
 
 [project.optional-dependencies]
@@ -32,6 +33,7 @@ dev = [
 packages = [
     {include = "task_lib"},
     {include = "task_api"},
+    {include = "task_tui"},
 ]
 
 
@@ -39,8 +41,12 @@ packages = [
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
 [dependency-groups]
 dev = [
     "pytest (>=9.0.3,<10.0.0)",
-    "pytest-cov (>=7.1.0,<8.0.0)"
+    "pytest-cov (>=7.1.0,<8.0.0)",
+    "pytest-asyncio (>=1.3.0,<2.0.0)"
 ]

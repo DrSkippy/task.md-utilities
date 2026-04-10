@@ -1,12 +1,12 @@
 # Task.md Utilities (HENDRICKSON KANBAN)
 
-A REST API, MCP server, and command-line interface for managing tasks organized in lanes, where each task is a markdown file.
+A REST API, MCP server, and interactive CLI for managing tasks organized in lanes, where each task is a markdown file. The CLI includes a full-screen Textual TUI (kanban board with keyboard navigation) as well as non-interactive subcommands for scripting.
 
 ## About Tasks.md
 
 This project builds on and extends the [Tasks.md](https://github.com/BaldissaraMatheus/Tasks.md) project. For comprehensive information about the Tasks.md system, including task visualization, board views, file format specifications, and VSCode integration, visit the [Tasks.md repository](https://github.com/BaldissaraMatheus/Tasks.md).
 
-This package adds a REST API, a network-capable CLI, and an MCP server for programmatic task management.
+This package adds a REST API, a network-capable interactive CLI, and an MCP server for programmatic task management.
 
 ## Overview
 
@@ -41,12 +41,18 @@ Tasks are stored as markdown files organized in lane directories:
 ```
 task.md-utilities/
 ├── bin/
-│   ├── tasks               # CLI — connects to REST API
+│   ├── tasks               # CLI — TUI (no args) or subcommands (scripting)
 │   └── tag-utility.py      # One-time tag format migration utility
 ├── task_lib/
+│   ├── api_client.py       # Shared HTTP helpers (used by CLI and TUI)
 │   ├── config.py           # Configuration (YAML)
 │   ├── task.py             # Task model and file I/O
 │   └── task_manager.py     # Lane and task operations
+├── task_tui/               # Textual TUI package
+│   ├── app.py              # KanbanApp — main board, keybindings, workers
+│   ├── api.py              # Sync API wrappers for use in workers
+│   ├── screens.py          # Detail, form, confirm, filter, move screens
+│   └── widgets.py          # LaneColumn, TaskItem, FunctionKeyBar
 ├── task_api/               # Flask REST API service
 │   ├── app.py
 │   ├── config.py
@@ -120,7 +126,10 @@ cd mcp_task_service && docker-compose up -d  # MCP only
 
 ## CLI (`bin/tasks`)
 
-The `tasks` CLI connects to the REST API and can run from any machine.
+The `tasks` binary has two modes:
+
+- **No arguments** — launches the full-screen interactive TUI (kanban board)
+- **With a subcommand** — runs non-interactively for scripting
 
 ### Installation
 
@@ -143,7 +152,37 @@ Create `~/.config/tasks/config.yaml` to set a permanent remote URL:
 api_url: http://your-server:3101
 ```
 
-### Commands
+---
+
+### Interactive TUI
+
+```bash
+tasks
+```
+
+Launches a full-screen kanban board. Lanes are displayed as side-by-side columns; tasks are listed under each lane.
+
+#### Keyboard navigation
+
+| Key | Action |
+|-----|--------|
+| `←` / `→` | Move between lanes |
+| `↑` / `↓` | Move between tasks within a lane |
+| `Enter` | Open task detail view |
+| `Esc` | Go back / close dialog |
+| `F1` | Show keyboard shortcut help |
+| `F2` | New task (in the focused lane) |
+| `F3` | Edit selected task |
+| `F4` | Delete selected task (confirm prompt) |
+| `F5` | Filter tasks (by lane, tag, or title substring) |
+| `F6` | Move selected task to another lane |
+| `F10` | Quit |
+
+Active filters are shown in a status bar at the top; press `F5` again to change or clear them.
+
+---
+
+### Subcommands
 
 ```
 tasks [--api-url URL] COMMAND
@@ -295,7 +334,7 @@ Task body text goes here.
 ### Run tests
 
 ```bash
-poetry run pytest --cov=task_lib --cov=task_api --cov-report=term-missing tests/
+poetry run pytest --cov=task_lib --cov=task_api --cov=task_tui --cov-report=term-missing tests/
 ```
 
 ### Run REST API locally
