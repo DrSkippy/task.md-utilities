@@ -33,6 +33,7 @@ class KanbanApp(App):
         Binding("f4", "delete_task", "Delete"),
         Binding("f5", "filter_tasks", "Filter"),
         Binding("f6", "move_task", "Move"),
+        Binding("f7", "view_task", "Detail"),
         Binding("f10", "quit", "Quit"),
         Binding("left", "prev_lane", "Prev Lane", show=False),
         Binding("right", "next_lane", "Next Lane", show=False),
@@ -200,8 +201,8 @@ class KanbanApp(App):
 
     def action_show_help(self) -> None:
         self.notify(
-            "←/→ Navigate lanes  ↑/↓ Navigate tasks  Enter View  "
-            "F2 New  F3 Edit  F4 Delete  F5 Filter  F6 Move  F10 Quit",
+            "←/→ Navigate lanes  ↑/↓ Navigate tasks  Enter/F7 Detail  "
+            "F2 New  F3 Edit  F4 Delete  F5 Filter  F6 Move  F7 Detail  F10 Quit",
             title="Keyboard Shortcuts",
             timeout=6,
         )

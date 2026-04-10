@@ -33,6 +33,7 @@ class DetailScreen(Screen):
         Binding("f3", "edit", "Edit"),
         Binding("f4", "delete", "Delete"),
         Binding("f6", "move", "Move"),
+        Binding("f7", "go_back", "Detail"),
     ]
 
     DEFAULT_CSS = """
@@ -76,7 +77,7 @@ class DetailScreen(Screen):
         yield Label(f" {t.get('title', '')}  [Lane: {t.get('lane', '')}]", id="detail-header")
         yield Label(f" Tags: {tags}   Due: {due}", id="detail-meta")
         yield ScrollableContainer(Label(t.get("content", ""), id="detail-content"))
-        yield Label("F3 Edit  F4 Delete  F6 Move  Esc Back", id="detail-footer")
+        yield Label("F3 Edit  F4 Delete  F6 Move  F7/Esc Close", id="detail-footer")
 
     def action_go_back(self) -> None:
         self.app.pop_screen()
