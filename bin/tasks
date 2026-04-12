@@ -234,6 +234,19 @@ def cmd_move(ctx: click.Context, title: str, new_lane: str) -> None:
     console.print(f"[green]{result.get('message', 'Done')}[/green]")
 
 
+@cli.command("empty-trash")
+@click.confirmation_option(prompt="Permanently delete all tasks in Trash?")
+@click.pass_context
+def cmd_empty_trash(ctx: click.Context) -> None:
+    """Permanently delete all tasks in the Trash lane."""
+    base = ctx.obj["api_url"]
+    try:
+        result = api_call("DELETE", f"{base}/operations/trash")
+    except APIError as e:
+        _handle_api_error(e)
+    console.print(f"[green]{result.get('message', 'Trash emptied')}[/green]")
+
+
 @cli.command("split")
 @click.pass_context
 def cmd_split(ctx: click.Context) -> None:

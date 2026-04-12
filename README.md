@@ -198,13 +198,14 @@ Commands:
   get     Show a single task in full
   add     Create a new task
   update  Update task fields
-  delete  Move a task to Trash
-  move    Change a task's lane
-  split   Split tasks containing [[split]] marker
-  lanes   Manage lanes
-    list  List lanes with task counts
-    add   Create a new lane
-  stats   Show statistics summary
+  delete       Move a task to Trash
+  empty-trash  Permanently delete all tasks in Trash
+  move         Change a task's lane
+  split        Split tasks containing [[split]] marker
+  lanes        Manage lanes
+    list       List lanes with task counts
+    add        Create a new lane
+  stats        Show statistics summary
 ```
 
 ### Examples
@@ -232,6 +233,9 @@ tasks move "Fix bug" "In Progress"
 
 # Delete (moves to Trash, prompts for confirmation)
 tasks delete "Fix bug"
+
+# Permanently delete all tasks in Trash (prompts for confirmation)
+tasks empty-trash
 
 # Lane management
 tasks lanes list
